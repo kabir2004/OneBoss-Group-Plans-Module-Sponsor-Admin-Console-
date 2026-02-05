@@ -109,10 +109,13 @@ const Index = () => {
   // Trades View Toggle
   const [tradesView, setTradesView] = useState<'progress' | 'rejected' | 'confirmed'>('progress');
 
+  // Contributions by Plan Type time filter (Sponsor perspective)
+  const [contributionsPeriod, setContributionsPeriod] = useState<'MTD' | 'QTD' | 'YTD' | 'All'>('YTD');
+
   // Widget Configuration
   const [showWidgetConfig, setShowWidgetConfig] = useState(false);
   const [activeWidgets, setActiveWidgets] = useState<Set<string>>(new Set([
-    'assetsByPlanType',
+    'contributionsByPlanType',
     'assetsBySupplier',
     'eStatementSignup',
     'topFiveClients'
@@ -124,6 +127,8 @@ const Index = () => {
 
   const allWidgets = [
     { id: 'assetsByPlanType', name: 'Assets By Plan Type' },
+    { id: 'contributionsByPlanType', name: 'Contributions by Plan Type' },
+    { id: 'plansOverview', name: 'Plans Overview' },
     { id: 'assetsBySupplier', name: 'Total Assets' },
     { id: 'eStatementSignup', name: 'KYC' },
     { id: 'topFiveClients', name: 'Analyze My Book' },
@@ -577,6 +582,34 @@ const Index = () => {
     { name: 'OPEN', value: openPercentage, color: '#8b5cf6', percentage: openPercentage, count: planTypes.find(p => p.type === 'OPEN')?.count || 0 },
     { name: 'Other', value: otherPercentage, color: '#e5e7eb', percentage: otherPercentage, count: planTypes.find(p => p.type === 'Other')?.count || 0 },
   ];
+
+  // Contributions by Plan Type (Sponsor perspective): Group RRSP, TFSA, DPSP — Employee vs Employer (Match/Company)
+  const contributionsByPlanTypeData = useMemo(() => {
+    const periodMultipliers: Record<typeof contributionsPeriod, { groupRRSP: [number, number]; tfsa: [number, number]; dpsp: [number, number] }> = {
+      MTD: { groupRRSP: [42000, 16800], tfsa: [28000, 0], dpsp: [0, 0] },
+      QTD: { groupRRSP: [85000, 34000], tfsa: [62000, 0], dpsp: [72000, 28800] },
+      YTD: { groupRRSP: [120000, 48000], tfsa: [85000, 0], dpsp: [95000, 38000] },
+      All: { groupRRSP: [285000, 114000], tfsa: [198000, 0], dpsp: [220000, 88000] },
+    };
+    const m = periodMultipliers[contributionsPeriod];
+    const rows = [
+      { planType: 'Group RRSP', employeeContributions: m.groupRRSP[0], employerContributions: m.groupRRSP[1] },
+      { planType: 'TFSA', employeeContributions: m.tfsa[0], employerContributions: m.tfsa[1] },
+      { planType: 'DPSP', employeeContributions: m.dpsp[0], employerContributions: m.dpsp[1] },
+    ];
+    const maxTotal = Math.max(...rows.map((r) => r.employeeContributions + r.employerContributions), 1);
+    return rows.map((r) => {
+      const total = r.employeeContributions + r.employerContributions;
+      return { ...r, emptyPlaceholder: total === 0 ? maxTotal * 0.03 : 0 };
+    });
+  }, [contributionsPeriod]);
+
+  const totalContributionsSelectedPeriod = useMemo(() => {
+    return contributionsByPlanTypeData.reduce(
+      (sum, row) => sum + row.employeeContributions + row.employerContributions,
+      0
+    );
+  }, [contributionsByPlanTypeData]);
 
   const transactions = [
     { name: 'Smith Trust - Fund Purchase', time: 'Today • 2:45 PM', amount: '-$25,000.00', isNegative: true, icon: HandCoins },
@@ -1293,6 +1326,124 @@ const Index = () => {
                     </div>
                   </div>
                 </div>
+            </CardContent>
+          </Card>
+            )}
+
+            {/* Contributions by Plan Type */}
+            {activeWidgets.has('contributionsByPlanType') && (
+          <Card className="border border-gray-200 shadow-sm bg-white">
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-sm font-semibold text-gray-900">Contributions by Plan Type</CardTitle>
+                <Select value={contributionsPeriod} onValueChange={(v) => setContributionsPeriod(v as typeof contributionsPeriod)}>
+                  <SelectTrigger className="h-7 w-[72px] text-xs py-0 min-h-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="min-w-0">
+                    <SelectItem value="MTD" className="text-xs py-1.5">MTD</SelectItem>
+                    <SelectItem value="QTD" className="text-xs py-1.5">QTD</SelectItem>
+                    <SelectItem value="YTD" className="text-xs py-1.5">YTD</SelectItem>
+                    <SelectItem value="All" className="text-xs py-1.5">All</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs font-medium text-gray-700 mt-1 py-4">
+                Total Contributions (Selected Period): {formatCurrency(totalContributionsSelectedPeriod)}
+              </p>
+            </CardHeader>
+            <CardContent>
+                <ResponsiveContainer width="100%" height={150}>
+                  <BarChart
+                    data={contributionsByPlanTypeData}
+                    margin={{ top: 4, right: 8, left: 4, bottom: 24 }}
+                  >
+                    <XAxis dataKey="planType" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis
+                      type="number"
+                      tickFormatter={(v) => (v >= 1000 ? `$${v / 1000}k` : `$${v}`)}
+                      tick={{ fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={36}
+                    />
+                    <RechartsTooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length || !label) return null;
+                        const row = payload[0]?.payload as (typeof contributionsByPlanTypeData)[0];
+                        const employee = row?.employeeContributions ?? 0;
+                        const employer = row?.employerContributions ?? 0;
+                        const total = employee + employer;
+                        return (
+                          <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[160px]">
+                            <p className="text-sm font-medium text-gray-900">{label}</p>
+                            <p className="text-xs text-gray-600">Employee: {formatCurrency(employee)}</p>
+                            <p className="text-xs text-gray-600">Employer (Match/Company): {formatCurrency(employer)}</p>
+                            <p className="text-xs font-medium text-gray-900 mt-1 pt-1 border-t border-gray-100">Total: {formatCurrency(total)}</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="emptyPlaceholder" name="" stackId="contributions" fill="#e5e7eb" radius={[0, 2, 2, 0]} isAnimationActive={false} />
+                    <Bar dataKey="employeeContributions" name="Employee" stackId="contributions" fill="#3b82f6" radius={[0, 2, 2, 0]} />
+                    <Bar dataKey="employerContributions" name="Employer (Match/Company)" stackId="contributions" fill="#10b981" radius={[0, 2, 2, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="flex items-center justify-center gap-4 mt-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-sm bg-blue-500" />
+                    <span className="text-xs text-gray-700">Employee</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-sm bg-green-500" />
+                    <span className="text-xs text-gray-700">Employer (Match/Company)</span>
+                  </div>
+                </div>
+            </CardContent>
+          </Card>
+            )}
+
+            {/* Plans Overview: Group RRSP, TFSA, DPSP + All Plans aggregate */}
+            {activeWidgets.has('plansOverview') && (
+          <Card className="border border-gray-200 shadow-sm bg-white">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-gray-900">Plans Overview</CardTitle>
+            </CardHeader>
+            <CardContent className="py-4">
+              <div className="grid grid-cols-2 gap-3 min-h-[140px]">
+                {contributionsByPlanTypeData.map((row) => {
+                  const total = row.employeeContributions + row.employerContributions;
+                  const iconHoverClasses: Record<string, string> = {
+                    'Group RRSP': 'group-hover:text-blue-600',
+                    'TFSA': 'group-hover:text-emerald-600',
+                    'DPSP': 'group-hover:text-violet-600',
+                  };
+                  const iconMap: Record<string, React.ReactNode> = {
+                    'Group RRSP': <BriefcaseBusiness className={`h-6 w-6 text-gray-600 transition-colors ${iconHoverClasses[row.planType]}`} />,
+                    'TFSA': <Wallet2 className={`h-6 w-6 text-gray-600 transition-colors ${iconHoverClasses[row.planType]}`} />,
+                    'DPSP': <Building2 className={`h-6 w-6 text-gray-600 transition-colors ${iconHoverClasses[row.planType]}`} />,
+                  };
+                  return (
+                    <div
+                      key={row.planType}
+                      className="group flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-4 cursor-default"
+                    >
+                      <span className="mb-2" aria-hidden>{iconMap[row.planType]}</span>
+                      <p className="text-xs font-medium text-gray-600 text-center">{row.planType}</p>
+                      <p className="text-sm font-semibold text-gray-900 mt-2 text-center">
+                        {formatCurrency(total)}
+                      </p>
+                    </div>
+                  );
+                })}
+                <div className="group flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-4 cursor-default">
+                  <Layers className="h-6 w-6 text-gray-600 mb-2 transition-colors group-hover:text-amber-600" aria-hidden />
+                  <p className="text-xs font-medium text-gray-600 text-center">All Plans</p>
+                  <p className="text-sm font-semibold text-gray-900 mt-2 text-center">
+                    {formatCurrency(totalContributionsSelectedPeriod)}
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
             )}

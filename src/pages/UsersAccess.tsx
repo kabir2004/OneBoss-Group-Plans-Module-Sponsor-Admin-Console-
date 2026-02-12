@@ -92,7 +92,7 @@ const getFieldLabel = (key: string) => FIELD_LABELS[key] ?? key.replace(/([A-Z])
 
 const UsersAccess = () => {
   const navigate = useNavigate();
-  const { canManageUsers, canViewUsersAccess, canApproveChanges, canManageAdmins, isAdminAssistant, isSuperAdmin } = useRolePermissions();
+  const { canManageUsers, canViewUsersAccess, canManageAdmins, isAdmin, isAdminAssistant, isSuperAdmin, role } = useRolePermissions();
   const {
     getEffectiveDetails,
     getPendingForRep,
@@ -130,7 +130,7 @@ const UsersAccess = () => {
 
   if (!canViewUsersAccess) return null;
 
-  // Admin can only manage Administrator Assistants; Super Admin can manage everyone
+  // Administrator Assistant can only manage Administrator Assistants; Super Admin can manage everyone
   const rolesForInvite = canManageAdmins ? ROLES : [ASSISTANT_ROLE];
   const canEditUser = (user: User) => canManageAdmins || user.role === ASSISTANT_ROLE;
   const rolesForEdit = canManageAdmins ? ROLES : [ASSISTANT_ROLE];
@@ -188,9 +188,17 @@ const UsersAccess = () => {
   const baseDetails: RepDetails | null = selectedClient ? getRepresentativeDetails(selectedClient.id, selectedClient) : null;
   const details: RepDetails | null = baseDetails ? getEffectiveDetails(baseDetails) : null;
   const pending = selectedRepresentativeId ? getPendingForRep(selectedRepresentativeId) : null;
-  const showDiffView = canApproveChanges && pending;
-  const canEditTiles = (isAdminAssistant || isSuperAdmin) && !showDiffView;
-  const showPendingBanner = isAdminAssistant && pending;
+  /** Only Administrator and Super Admin see "Submitted for Review" / Approve-Reject. Admin Assistant never sees it. Admin approves only when submitted by Admin Assistant; Super Admin approves all. */
+  const canSeeApproveReject =
+    pending &&
+    !isAdminAssistant &&
+    (isSuperAdmin || (isAdmin && (pending.submittedByRole === 'admin-assistant' || pending.submittedByRole == null)));
+  const showDiffView = canSeeApproveReject && pending;
+  const canEditTiles = (isAdmin || isAdminAssistant || isSuperAdmin) && !showDiffView;
+  /** Administrator Assistant can only edit Addresses, Office Contact, Home Contact; not Details or Maximums. */
+  const canEditTile = (tileId: TileId) => canEditTiles && (!isAdminAssistant || (tileId !== 'details' && tileId !== 'maximums'));
+  /** Only the submitting role (Administrator) sees "Changes pending approval"; Administrator Assistant approves, so not applicable to them. */
+  const showPendingBanner = isAdmin && pending;
 
   const handleStartEditTile = (tileId: TileId) => {
     if (!details) return;
@@ -244,7 +252,7 @@ const UsersAccess = () => {
         officeMailingAddress: editForm.officeMailingAddress ? { ...(base.officeMailingAddress ?? details.officeMailingAddress), ...editForm.officeMailingAddress } : base.officeMailingAddress,
         residentialMailingAddress: editForm.residentialMailingAddress ? { ...(base.residentialMailingAddress ?? details.residentialMailingAddress), ...editForm.residentialMailingAddress } : base.residentialMailingAddress,
       };
-      submitPending(selectedRepresentativeId, merged);
+      submitPending(selectedRepresentativeId, merged, role);
     }
     setEditingTile(null);
     setEditForm(null);
@@ -368,7 +376,7 @@ const UsersAccess = () => {
     return (
       <CardHeader className="py-1.5 px-3 shrink-0 flex flex-row items-center justify-between gap-2 border-b border-gray-100">
         <CardTitle className="text-sm font-semibold">{title}</CardTitle>
-        {canEditTiles ? (
+        {canEditTile(tileId) ? (
           editingTile === tileId ? (
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 gap-1.5 rounded-md" onClick={handleCancelTile}>
@@ -419,7 +427,7 @@ const UsersAccess = () => {
     <div
       className={
         large
-          ? 'flex justify-between gap-2 py-1 text-sm leading-tight'
+          ? 'flex justify-between gap-1.5 py-0.5 text-sm leading-tight'
           : 'flex justify-between gap-1 py-0 text-[11px] leading-tight'
       }
     >
@@ -468,14 +476,14 @@ const UsersAccess = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 items-stretch mb-2">
               <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0 transition-[min-height] duration-150 ease-out">
                 <TileHeader tileId="details" title="Details" />
-                <CardContent className="px-2 pb-2 flex-1 overflow-auto min-h-[300px]">
-                  <div className="min-h-[280px] transition-opacity duration-150 ease-out">
+                <CardContent className="px-2 py-1.5 flex-1 overflow-auto min-h-0">
+                  <div className="transition-opacity duration-150 ease-out space-y-0.5">
                   {editingTile === 'details' && editForm ? (
-                    <div className="grid grid-cols-1 gap-1.5 text-sm">
+                    <div className="grid grid-cols-1 gap-1 text-sm">
                       {(['surname', 'name', 'dateOfBirth', 'businessName', 'startDate', 'endDate', 'serviceLevel', 'note'] as const).map((key) => (
                         <div key={key} className="flex items-center gap-2">
-                          <Label className="text-sm font-medium text-gray-700 w-28 shrink-0">{getFieldLabel(key)}</Label>
-                          <Input value={editForm[key] ?? ''} onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })} className="h-7 text-sm flex-1" />
+                          <Label className="text-sm font-medium text-gray-700 w-24 shrink-0">{getFieldLabel(key)}</Label>
+                          <Input value={editForm[key] ?? ''} onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })} className="h-6 text-sm flex-1 min-w-0" />
                         </div>
                       ))}
                     </div>

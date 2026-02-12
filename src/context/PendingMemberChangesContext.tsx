@@ -29,9 +29,14 @@ export type ProposedMemberEdits = Partial<{
 
 export type PendingStatus = 'submitted';
 
+/** Role that submitted the pending change: Admin Assistant → Admin or Super Admin approves; Admin → Super Admin only approves. */
+export type SubmitterRole = 'admin' | 'admin-assistant' | 'super-admin';
+
 export type PendingChange = {
   status: PendingStatus;
   proposed: ProposedMemberEdits;
+  /** Who submitted; determines who can approve (admin-assistant → admin/super-admin; admin → super-admin only). */
+  submittedByRole?: SubmitterRole;
   rejectedComment?: string;
 };
 
@@ -42,7 +47,7 @@ type ContextType = {
   appliedEditsByRep: Record<string, ProposedMemberEdits>;
   /** IDs of representatives that have submitted pending changes (for badge). */
   repIdsWithPendingChanges: string[];
-  submitPending: (repId: string, proposed: ProposedMemberEdits) => void;
+  submitPending: (repId: string, proposed: ProposedMemberEdits, submittedByRole?: SubmitterRole) => void;
   approvePending: (repId: string) => void;
   rejectPending: (repId: string, comment: string) => void;
   applyDirectEdits: (repId: string, proposed: ProposedMemberEdits) => void;
@@ -77,10 +82,10 @@ export function PendingMemberChangesProvider({ children }: { children: ReactNode
 
   const repIdsWithPendingChanges = Object.keys(pendingByRep);
 
-  const submitPending = useCallback((repId: string, proposed: ProposedMemberEdits) => {
+  const submitPending = useCallback((repId: string, proposed: ProposedMemberEdits, submittedByRole?: SubmitterRole) => {
     setPendingByRep((prev) => ({
       ...prev,
-      [repId]: { status: 'submitted', proposed },
+      [repId]: { status: 'submitted', proposed, submittedByRole },
     }));
   }, []);
 

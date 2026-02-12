@@ -6,13 +6,13 @@ export type Role = InterfaceType; // 'super-admin' | 'admin' | 'admin-assistant'
 
 interface RolePermissionsContextType {
   role: Role;
-  /** Admin Assistant: false. Admin + Super Admin: true. */
+  /** Administrator: false. Administrator Assistant + Super Admin: true. */
   canManageUsers: boolean;
-  /** All roles can view Users & Access and member details (Assistant can submit edits for approval). */
+  /** All roles can view Users & Access and member details (Administrator can submit edits for approval). */
   canViewUsersAccess: boolean;
-  /** Admin Assistant: false (no configure). Admin + Super Admin: true. */
+  /** Administrator: false (no configure). Administrator Assistant + Super Admin: true. */
   canConfigure: boolean;
-  /** Admin Assistant: false. Admin + Super Admin: true (approve changes). */
+  /** Administrator: false. Administrator Assistant + Super Admin: true (approve changes). */
   canApproveChanges: boolean;
   /** All roles can view members and edit tombstone info. */
   canEditTombstone: boolean;
@@ -34,10 +34,10 @@ export function RolePermissionsProvider({ children }: { children: ReactNode }) {
   const isAdmin = role === 'admin';
   const isAdminAssistant = role === 'admin-assistant';
 
-  const canManageUsers = isSuperAdmin || isAdmin;
+  const canManageUsers = isSuperAdmin || isAdminAssistant;
   const canViewUsersAccess = true;
-  const canConfigure = isSuperAdmin || isAdmin;
-  const canApproveChanges = isSuperAdmin || isAdmin;
+  const canConfigure = isSuperAdmin || isAdminAssistant;
+  const canApproveChanges = isSuperAdmin || isAdminAssistant;
   const canEditTombstone = true;
   const canManageAdmins = isSuperAdmin;
 

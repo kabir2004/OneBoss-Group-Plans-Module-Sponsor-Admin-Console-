@@ -23,7 +23,7 @@ function getCurrentUser() {
 }
 
 const TombstoneWorkflow = () => {
-  const { canApproveChanges, isAdminAssistant } = useRolePermissions();
+  const { canApproveChanges, isAdmin } = useRolePermissions();
   const {
     submissions,
     pendingSubmissions,
@@ -80,7 +80,7 @@ const TombstoneWorkflow = () => {
                 Review Queue
               </CardTitle>
               <CardDescription>
-                Pending tombstone edits submitted by Administrator Assistants. Approve or reject each request.
+                Pending tombstone edits submitted by Administrators. Approve or reject each request.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -148,8 +148,8 @@ const TombstoneWorkflow = () => {
           </Card>
         )}
 
-        {/* Administrator Assistant: Submit tombstone edit */}
-        {isAdminAssistant && (
+        {/* Administrator: Submit tombstone edit */}
+        {isAdmin && (
           <Card className="border border-gray-200 shadow-sm bg-white">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -157,7 +157,7 @@ const TombstoneWorkflow = () => {
                 Submit Tombstone Edit
               </CardTitle>
               <CardDescription>
-                Submit client or plan tombstone changes for review. An Administrator or Super Administrator will approve or reject.
+                Submit client or plan tombstone changes for review. An Administrator Assistant or Super Administrator will approve or reject.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -252,12 +252,12 @@ const TombstoneWorkflow = () => {
           </Card>
         )}
 
-        {/* My submissions (for Assistant) or all submissions (for Admin/Super Admin) */}
+        {/* My submissions (for Administrator) or all submissions (for Administrator Assistant/Super Admin) */}
         <Card className="border border-gray-200 shadow-sm bg-white">
           <CardHeader>
             <CardTitle>Submissions</CardTitle>
             <CardDescription>
-              {isAdminAssistant ? 'Your tombstone edit submissions and their status.' : 'All tombstone submissions.'}
+              {isAdmin ? 'Your tombstone edit submissions and their status.' : 'All tombstone submissions.'}
             </CardDescription>
           </CardHeader>
           <CardContent>

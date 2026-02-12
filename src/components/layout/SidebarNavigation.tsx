@@ -223,8 +223,8 @@ export function SidebarNavigation() {
   }, [location.pathname]);
 
 
-  // Use OneBoss menu for Super Administrator and Administrator, legacy for Administrator Assistant
-  let menuItems = (currentInterface === 'super-admin' || currentInterface === 'admin')
+  // Use OneBoss menu for Super Administrator and Administrator Assistant, legacy for Administrator
+  let menuItems = (currentInterface === 'super-admin' || currentInterface === 'admin-assistant')
     ? oneBossMenuItems
     : legacyMenuItems;
 

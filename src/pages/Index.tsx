@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { useInterface } from '@/context/InterfaceContext';
+import { useRolePermissions } from '@/context/RolePermissionsContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -77,6 +78,7 @@ const formatCurrency = (value: number) => {
 const Index = () => {
   const navigate = useNavigate();
   const { isIntermediaryInterface } = useInterface();
+  const { canConfigure } = useRolePermissions();
   const [activeTradeTab, setActiveTradeTab] = useState<'progress' | 'rejected' | 'confirmed'>('progress');
   const [isPlansExpanded, setIsPlansExpanded] = useState(false);
   const [showAddPlan, setShowAddPlan] = useState(false);
@@ -399,7 +401,7 @@ const Index = () => {
     // Members: "active" = enrolled members (default). Optional filter for 'active contributors' if available later.
     { label: 'Members', value: '1,247', tooltip: 'Number of unique plan participants across sponsored plans.', icon: Users, iconBg: 'bg-blue-100', iconColor: 'text-blue-600' },
     { label: 'AVERAGE ACCOUNT SIZE', value: '$102.2K', tooltip: 'Average account size across plans sponsored by this organization.', icon: BarChart3, iconBg: 'bg-purple-100', iconColor: 'text-purple-600' },
-    { label: 'Fund Families', value: '24', tooltip: 'Number of fund families used in plans sponsored by this organization.', icon: Building2, iconBg: 'bg-orange-100', iconColor: 'text-orange-600' },
+    { label: 'Fund Families', value: '', tooltip: 'Number of fund families used in plans sponsored by this organization.', icon: Building2, iconBg: 'bg-orange-100', iconColor: 'text-orange-600' },
   ];
 
   const fundCategories = [
@@ -1175,6 +1177,14 @@ const Index = () => {
         {/* Advisor Snapshot */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {statsCards.map((stat, index) => {
+            const isFundFamilies = stat.label === 'Fund Families';
+            if (isFundFamilies) {
+              return (
+                <Card key={index} className="border border-gray-200 shadow-sm bg-white min-h-[88px]">
+                  <CardContent className="flex items-center justify-center py-4 h-full min-h-[88px]" />
+                </Card>
+              );
+            }
             const isGroupAssets = stat.label === 'Group Assets';
             const displayValue = isGroupAssets ? formatCurrency(totalAUA) : stat.value;
             const cardContent = (
@@ -1249,15 +1259,17 @@ const Index = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-gray-900">Charts and Analytics</h2>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="h-8 text-xs"
-              onClick={() => setShowWidgetConfig(!showWidgetConfig)}
-            >
-              <Settings className="h-3 w-3 mr-1" />
-              {showWidgetConfig ? 'Hide Configure' : 'Configure'}
-            </Button>
+            {canConfigure && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 text-xs"
+                onClick={() => setShowWidgetConfig(!showWidgetConfig)}
+              >
+                <Settings className="h-3 w-3 mr-1" />
+                {showWidgetConfig ? 'Hide Configure' : 'Configure'}
+              </Button>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {/* Assets By Plan Type */}

@@ -9,10 +9,20 @@ interface InterfaceContextType {
 
 const InterfaceContext = createContext<InterfaceContextType | undefined>(undefined);
 
+const LEGACY_TO_NEW: Record<string, InterfaceType> = {
+  'intermediary-dealer': 'super-admin',
+  'oneboss-dealer': 'super-admin',
+  'intermediary-advisor': 'admin',
+  'oneboss-advisor': 'admin',
+  'intermediary-client': 'admin-assistant',
+};
+
 export function InterfaceProvider({ children }: { children: ReactNode }) {
   const [currentInterface, setCurrentInterfaceState] = useState<InterfaceType>(() => {
     const saved = localStorage.getItem('selectedInterface');
-    return (saved as InterfaceType) || 'oneboss-advisor';
+    if (saved && LEGACY_TO_NEW[saved]) return LEGACY_TO_NEW[saved];
+    const valid: InterfaceType[] = ['super-admin', 'admin', 'admin-assistant'];
+    return (valid.includes(saved as InterfaceType) ? saved : 'admin') as InterfaceType;
   });
 
   const setCurrentInterface = (interfaceType: InterfaceType) => {
@@ -33,10 +43,7 @@ export function InterfaceProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const isIntermediaryInterface = 
-    currentInterface === 'intermediary-dealer' ||
-    currentInterface === 'intermediary-advisor' ||
-    currentInterface === 'intermediary-client';
+  const isIntermediaryInterface = currentInterface === 'admin-assistant';
 
   return (
     <InterfaceContext.Provider

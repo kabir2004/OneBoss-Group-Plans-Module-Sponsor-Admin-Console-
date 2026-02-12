@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageLayout } from "@/components/layout/PageLayout";
+import { useRolePermissions } from "@/context/RolePermissionsContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,11 +132,18 @@ const APPROVALS: Approval[] = [
 
 const Approvals = () => {
   const navigate = useNavigate();
+  const { canApproveChanges } = useRolePermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [typeFilter, setTypeFilter] = useState("All Types");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  useEffect(() => {
+    if (!canApproveChanges) navigate("/", { replace: true });
+  }, [canApproveChanges, navigate]);
+
+  if (!canApproveChanges) return null;
 
   const totalItems = APPROVALS.length;
   const pendingApprovals = APPROVALS.filter(

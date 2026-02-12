@@ -1,0 +1,904 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { useRolePermissions } from '@/context/RolePermissionsContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { UserPlus, Pencil, UserX, Save, X } from 'lucide-react';
+import { useRepresentativesSearch } from '@/context/RepresentativesSearchContext';
+import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
+import type { ProposedMemberEdits } from '@/context/PendingMemberChangesContext';
+import { CLIENTS } from '@/pages/Clients';
+import { getRepresentativeDetails } from '@/data/representativeDetails';
+import type { RepDetails } from '@/data/representativeDetails';
+import { Textarea } from '@/components/ui/textarea';
+
+type UserStatus = 'Active' | 'Disabled';
+type UserRole = 'Super Administrator' | 'Administrator' | 'Administrator Assistant';
+
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+};
+
+const ROLES: UserRole[] = ['Super Administrator', 'Administrator', 'Administrator Assistant'];
+
+const initialUsers: User[] = [
+  { id: '1', name: 'Antoine Marsh', email: 'antoine.marsh@example.com', role: 'Administrator', status: 'Active' },
+  { id: '2', name: 'Sarah Chen', email: 'sarah.chen@example.com', role: 'Super Administrator', status: 'Active' },
+  { id: '3', name: 'James Wilson', email: 'james.wilson@example.com', role: 'Administrator Assistant', status: 'Active' },
+  { id: '4', name: 'Maria Garcia', email: 'maria.garcia@example.com', role: 'Administrator', status: 'Disabled' },
+];
+
+const ASSISTANT_ROLE: UserRole = 'Administrator Assistant';
+
+/** Proper display labels for edit form fields (grammar and capitalization). */
+const FIELD_LABELS: Record<string, string> = {
+  surname: 'Surname',
+  name: 'Name',
+  dateOfBirth: 'Date of Birth',
+  businessName: 'Business Name',
+  startDate: 'Start Date',
+  endDate: 'End Date',
+  serviceLevel: 'Service Level',
+  note: 'Note',
+  dealerMaximums: 'Dealer Maximums',
+  managerMaximums: 'Manager Maximums',
+  officeAddress: 'Office Address',
+  residentialAddress: 'Residential Address',
+  officeMailingAddress: 'Office Mailing Address',
+  residentialMailingAddress: 'Residential Mailing Address',
+  address: 'Address',
+  city: 'City',
+  province: 'Province',
+  postal: 'Postal Code',
+  country: 'Country',
+  phone: 'Phone',
+  fax: 'Fax',
+  cell: 'Cell',
+  email: 'E-mail',
+};
+
+const getFieldLabel = (key: string) => FIELD_LABELS[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^\w/, (s) => s.toUpperCase());
+
+const UsersAccess = () => {
+  const navigate = useNavigate();
+  const { canManageUsers, canViewUsersAccess, canApproveChanges, canManageAdmins, isAdminAssistant, isSuperAdmin } = useRolePermissions();
+  const {
+    getEffectiveDetails,
+    getPendingForRep,
+    submitPending,
+    approvePending,
+    rejectPending,
+    applyDirectEdits,
+  } = usePendingMemberChanges();
+  const [users, setUsers] = useState<User[]>(initialUsers);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [editRoleOpen, setEditRoleOpen] = useState(false);
+  const [disableOpen, setDisableOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [inviteName, setInviteName] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<UserRole>(ASSISTANT_ROLE);
+  const [editRoleUserId, setEditRoleUserId] = useState<string>('');
+  const [editRoleValue, setEditRoleValue] = useState<UserRole>(ASSISTANT_ROLE);
+  type TileId = 'details' | 'addresses' | 'officeContact' | 'homeContact' | 'maximums';
+  const [editingTile, setEditingTile] = useState<TileId | null>(null);
+  const [editForm, setEditForm] = useState<ProposedMemberEdits | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectComment, setRejectComment] = useState('');
+
+  const { setRepresentativesCount, setRepresentativesList, selectedRepresentativeId } = useRepresentativesSearch();
+
+  useEffect(() => {
+    if (!canViewUsersAccess) navigate('/', { replace: true });
+  }, [canViewUsersAccess, navigate]);
+
+  useEffect(() => {
+    setRepresentativesCount(CLIENTS.length);
+    setRepresentativesList(CLIENTS.map((c) => ({ id: c.id, name: c.name, status: c.status })));
+  }, [setRepresentativesCount, setRepresentativesList]);
+
+  if (!canViewUsersAccess) return null;
+
+  // Admin can only manage Administrator Assistants; Super Admin can manage everyone
+  const rolesForInvite = canManageAdmins ? ROLES : [ASSISTANT_ROLE];
+  const canEditUser = (user: User) => canManageAdmins || user.role === ASSISTANT_ROLE;
+  const rolesForEdit = canManageAdmins ? ROLES : [ASSISTANT_ROLE];
+
+  const handleInviteSubmit = () => {
+    if (!inviteName.trim() || !inviteEmail.trim()) return;
+    setUsers((prev) => [
+      ...prev,
+      {
+        id: String(prev.length + 1),
+        name: inviteName.trim(),
+        email: inviteEmail.trim(),
+        role: inviteRole,
+        status: 'Active',
+      },
+    ]);
+    setInviteName('');
+    setInviteEmail('');
+    setInviteRole(ASSISTANT_ROLE);
+    setInviteOpen(false);
+  };
+
+  const openEditRole = (user: User) => {
+    if (!canEditUser(user)) return;
+    setSelectedUser(user);
+    setEditRoleUserId(user.id);
+    setEditRoleValue(user.role);
+    setEditRoleOpen(true);
+  };
+
+  const handleEditRoleSubmit = () => {
+    if (!editRoleUserId) return;
+    setUsers((prev) =>
+      prev.map((u) => (u.id === editRoleUserId ? { ...u, role: editRoleValue } : u))
+    );
+    setEditRoleOpen(false);
+    setSelectedUser(null);
+  };
+
+  const openDisable = (user: User) => {
+    setSelectedUser(user);
+    setDisableOpen(true);
+  };
+
+  const handleDisableSubmit = () => {
+    if (!selectedUser) return;
+    setUsers((prev) =>
+      prev.map((u) => (u.id === selectedUser.id ? { ...u, status: 'Disabled' as UserStatus } : u))
+    );
+    setDisableOpen(false);
+    setSelectedUser(null);
+  };
+
+  const selectedClient = selectedRepresentativeId ? CLIENTS.find((c) => c.id === selectedRepresentativeId) : null;
+  const baseDetails: RepDetails | null = selectedClient ? getRepresentativeDetails(selectedClient.id, selectedClient) : null;
+  const details: RepDetails | null = baseDetails ? getEffectiveDetails(baseDetails) : null;
+  const pending = selectedRepresentativeId ? getPendingForRep(selectedRepresentativeId) : null;
+  const showDiffView = canApproveChanges && pending;
+  const canEditTiles = (isAdminAssistant || isSuperAdmin) && !showDiffView;
+  const showPendingBanner = isAdminAssistant && pending;
+
+  const handleStartEditTile = (tileId: TileId) => {
+    if (!details) return;
+    if (tileId === 'details') {
+      setEditForm({
+        surname: details.surname,
+        name: details.name,
+        dateOfBirth: details.dateOfBirth,
+        businessName: details.businessName,
+        startDate: details.startDate,
+        endDate: details.endDate,
+        serviceLevel: details.serviceLevel,
+        note: details.note,
+      });
+    } else if (tileId === 'officeContact') {
+      setEditForm({ officeContact: { ...details.officeContact } });
+    } else if (tileId === 'homeContact') {
+      setEditForm({ homeContact: { ...details.homeContact } });
+    } else if (tileId === 'maximums') {
+      setEditForm({ dealerMaximums: details.dealerMaximums, managerMaximums: details.managerMaximums });
+    } else if (tileId === 'addresses') {
+      setEditForm({
+        officeAddress: { ...details.officeAddress },
+        residentialAddress: { ...details.residentialAddress },
+        officeMailingAddress: { ...details.officeMailingAddress },
+        residentialMailingAddress: { ...details.residentialMailingAddress },
+      });
+    }
+    setEditingTile(tileId);
+  };
+
+  const handleCancelTile = () => {
+    setEditingTile(null);
+    setEditForm(null);
+  };
+
+  const handleSaveTile = () => {
+    if (!selectedRepresentativeId || !editForm || !editingTile) return;
+    if (isSuperAdmin) {
+      applyDirectEdits(selectedRepresentativeId, editForm);
+    } else {
+      // Merge this tile's edits with existing pending or current details so full proposed state is saved
+      const base = pending?.proposed ?? {};
+      const merged: ProposedMemberEdits = {
+        ...base,
+        ...editForm,
+        officeContact: editForm.officeContact ? { ...(base.officeContact ?? details.officeContact), ...editForm.officeContact } : base.officeContact,
+        homeContact: editForm.homeContact ? { ...(base.homeContact ?? details.homeContact), ...editForm.homeContact } : base.homeContact,
+        officeAddress: editForm.officeAddress ? { ...(base.officeAddress ?? details.officeAddress), ...editForm.officeAddress } : base.officeAddress,
+        residentialAddress: editForm.residentialAddress ? { ...(base.residentialAddress ?? details.residentialAddress), ...editForm.residentialAddress } : base.residentialAddress,
+        officeMailingAddress: editForm.officeMailingAddress ? { ...(base.officeMailingAddress ?? details.officeMailingAddress), ...editForm.officeMailingAddress } : base.officeMailingAddress,
+        residentialMailingAddress: editForm.residentialMailingAddress ? { ...(base.residentialMailingAddress ?? details.residentialMailingAddress), ...editForm.residentialMailingAddress } : base.residentialMailingAddress,
+      };
+      submitPending(selectedRepresentativeId, merged);
+    }
+    setEditingTile(null);
+    setEditForm(null);
+  };
+
+  const handleApprove = () => {
+    if (selectedRepresentativeId) approvePending(selectedRepresentativeId);
+  };
+
+  const handleRejectOpen = () => setRejectOpen(true);
+  const handleRejectConfirm = () => {
+    if (!selectedRepresentativeId || !rejectComment.trim()) return;
+    rejectPending(selectedRepresentativeId, rejectComment.trim());
+    setRejectOpen(false);
+    setRejectComment('');
+  };
+
+  function DiffView({ current, proposed }: { current: RepDetails; proposed: ProposedMemberEdits }) {
+    const rows: { label: string; current: string; proposed: string }[] = [];
+    const push = (label: string, curr: string | undefined, prop: string | undefined) => {
+      if (prop === undefined) return;
+      rows.push({ label, current: curr ?? '—', proposed: prop ?? '—' });
+    };
+    push('Surname', current.surname, proposed.surname);
+    push('Name', current.name, proposed.name);
+    push('Date of birth', current.dateOfBirth, proposed.dateOfBirth);
+    push('Business Name', current.businessName, proposed.businessName);
+    push('Start Date', current.startDate, proposed.startDate);
+    push('End Date', current.endDate, proposed.endDate);
+    push('Service Level', current.serviceLevel, proposed.serviceLevel);
+    push('Note', current.note, proposed.note);
+    push('Dealer Maximums', current.dealerMaximums, proposed.dealerMaximums);
+    push('Manager Maximums', current.managerMaximums, proposed.managerMaximums);
+    if (proposed.officeContact) {
+      push('Office Phone', current.officeContact.phone, proposed.officeContact.phone);
+      push('Office E-mail', current.officeContact.email, proposed.officeContact.email);
+    }
+    if (proposed.homeContact) {
+      push('Home Phone', current.homeContact.phone, proposed.homeContact.phone);
+      push('Home E-mail', current.homeContact.email, proposed.homeContact.email);
+    }
+    return (
+      <Card className="border border-gray-200 mb-2">
+        <CardHeader className="py-2 px-3">
+          <CardTitle className="text-sm font-semibold">Proposed changes</CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 pb-3 space-y-1.5 text-sm">
+          {rows.map((r, i) => (
+            <div key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="text-gray-600 shrink-0">{r.label}:</span>
+              {r.current !== r.proposed ? (
+                <>
+                  <span className="text-red-600 line-through">{r.current || '—'}</span>
+                  <span className="text-green-700 font-medium">{r.proposed || '—'}</span>
+                </>
+              ) : (
+                <span className="text-gray-900">{r.current || '—'}</span>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  function EditForm({ form, onChange }: { form: ProposedMemberEdits; onChange: (f: ProposedMemberEdits) => void }) {
+    const update = (key: keyof ProposedMemberEdits, value: string | undefined) => onChange({ ...form, [key]: value });
+    const updateNested = (key: 'officeContact' | 'homeContact', nestedKey: string, value: string) =>
+      onChange({
+        ...form,
+        [key]: { ...(form[key] ?? {}), [nestedKey]: value },
+      });
+    return (
+      <Card className="border border-gray-200 mb-2">
+        <CardHeader className="py-2 px-3">
+          <CardTitle className="text-sm font-semibold">Edit details</CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          {(['surname', 'name', 'dateOfBirth', 'businessName', 'startDate', 'endDate', 'serviceLevel', 'note'] as const).map((key) => (
+            <div key={key} className="grid gap-1.5">
+              <Label className="text-sm font-medium text-gray-700">{getFieldLabel(key)}</Label>
+              <Input value={form[key] ?? ''} onChange={(e) => update(key, e.target.value)} className="h-8 text-sm" />
+            </div>
+          ))}
+          {(['dealerMaximums', 'managerMaximums'] as const).map((key) => (
+            <div key={key} className="grid gap-1.5 sm:col-span-2">
+              <Label className="text-sm font-medium text-gray-700">{getFieldLabel(key)}</Label>
+              <Input value={form[key] ?? ''} onChange={(e) => update(key, e.target.value)} className="h-8 text-sm" />
+            </div>
+          ))}
+          {form.officeContact && (
+            <>
+              <div className="grid gap-1.5">
+                <Label className="text-sm font-medium text-gray-700">Office Phone</Label>
+                <Input value={form.officeContact.phone ?? ''} onChange={(e) => updateNested('officeContact', 'phone', e.target.value)} className="h-8 text-sm" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-sm font-medium text-gray-700">Office E-mail</Label>
+                <Input value={form.officeContact.email ?? ''} onChange={(e) => updateNested('officeContact', 'email', e.target.value)} className="h-8 text-sm" />
+              </div>
+            </>
+          )}
+          {form.homeContact && (
+            <>
+              <div className="grid gap-1.5">
+                <Label className="text-sm font-medium text-gray-700">Home Phone</Label>
+                <Input value={form.homeContact.phone ?? ''} onChange={(e) => updateNested('homeContact', 'phone', e.target.value)} className="h-8 text-sm" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-sm font-medium text-gray-700">Home E-mail</Label>
+                <Input value={form.homeContact.email ?? ''} onChange={(e) => updateNested('homeContact', 'email', e.target.value)} className="h-8 text-sm" />
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  function TileHeader({ tileId, title }: { tileId: TileId; title: string }) {
+    return (
+      <CardHeader className="py-1.5 px-3 shrink-0 flex flex-row items-center justify-between gap-2 border-b border-gray-100">
+        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+        {canEditTiles ? (
+          editingTile === tileId ? (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 gap-1.5 rounded-md" onClick={handleCancelTile}>
+                <X className="h-3 w-3" />
+                Cancel
+              </Button>
+              <Button size="sm" className="h-7 text-xs px-2.5 gap-1.5 rounded-md" onClick={handleSaveTile}>
+                <Save className="h-3 w-3" />
+                Save
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs px-2.5 gap-1.5 rounded-md border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+              onClick={() => handleStartEditTile(tileId)}
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </Button>
+          )
+        ) : (
+          <span className="text-xs text-gray-500 italic">Contact administrator</span>
+        )}
+      </CardHeader>
+    );
+  }
+
+  function ReadOnlyTileHeader({ title }: { title: string }) {
+    return (
+      <CardHeader className="py-1.5 px-3 shrink-0 flex flex-row items-center justify-between gap-2 border-b border-gray-100">
+        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+        {!canEditTiles && <span className="text-xs text-gray-500 italic">Contact administrator</span>}
+      </CardHeader>
+    );
+  }
+
+  const DetailRow = ({
+    label,
+    value,
+    large,
+  }: {
+    label: string;
+    value: string;
+    large?: boolean;
+  }) => (
+    <div
+      className={
+        large
+          ? 'flex justify-between gap-2 py-1 text-sm leading-tight'
+          : 'flex justify-between gap-1 py-0 text-[11px] leading-tight'
+      }
+    >
+      <span className="text-gray-500 shrink-0">{label}:</span>
+      <span className="text-gray-900 text-right truncate min-w-0">{value || '—'}</span>
+    </div>
+  );
+
+  return (
+    <PageLayout title="">
+      <div className="min-h-0 overflow-auto">
+        {!selectedRepresentativeId ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">User must select a person from the list to see more info.</p>
+          </div>
+        ) : details ? (
+          <>
+            <div className="flex items-center justify-between gap-2 border-b border-gray-200 pb-0.5 mb-1">
+              <h2 className="text-sm font-semibold text-gray-900">
+                Details {details.surname}, {details.name}
+              </h2>
+              <div className="flex items-center gap-2">
+                {showDiffView && (
+                  <>
+                    <span className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded">Submitted for Review</span>
+                    <Button size="sm" variant="default" className="h-7 text-xs" onClick={handleApprove}>
+                      Approve
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-200" onClick={handleRejectOpen}>
+                      Reject
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+            {showPendingBanner && (
+              <div className="mb-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                Changes pending approval
+              </div>
+            )}
+            {showDiffView && pending ? (
+              <DiffView current={details} proposed={pending.proposed} />
+            ) : (
+            <>
+            {/* Top row: Details | Addresses | 4 quads (Office Contact, Home Contact, Codes Rep, Codes T4A) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 items-stretch mb-2">
+              <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0 transition-[min-height] duration-150 ease-out">
+                <TileHeader tileId="details" title="Details" />
+                <CardContent className="px-2 pb-2 flex-1 overflow-auto min-h-[300px]">
+                  <div className="min-h-[280px] transition-opacity duration-150 ease-out">
+                  {editingTile === 'details' && editForm ? (
+                    <div className="grid grid-cols-1 gap-1.5 text-sm">
+                      {(['surname', 'name', 'dateOfBirth', 'businessName', 'startDate', 'endDate', 'serviceLevel', 'note'] as const).map((key) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <Label className="text-sm font-medium text-gray-700 w-28 shrink-0">{getFieldLabel(key)}</Label>
+                          <Input value={editForm[key] ?? ''} onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })} className="h-7 text-sm flex-1" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      <DetailRow large label="ID" value={details.id} />
+                      <DetailRow large label="NRD Number" value={details.nrdNumber} />
+                      <DetailRow large label="Surname" value={details.surname} />
+                      <DetailRow large label="Name" value={details.name} />
+                      <DetailRow large label="Date of birth" value={details.dateOfBirth} />
+                      <DetailRow large label="MR-72 On File" value={details.mr72OnFile} />
+                      <DetailRow large label="MR-72 On File Date" value={details.mr72OnFileDate} />
+                      <DetailRow large label="Business Name" value={details.businessName} />
+                      <DetailRow large label="Federal BN" value={details.federalBN} />
+                      <DetailRow large label="Provincial BN" value={details.provincialBN} />
+                      <DetailRow large label="Start Date" value={details.startDate} />
+                      <DetailRow large label="End Date" value={details.endDate} />
+                      <DetailRow large label="Service Level" value={details.serviceLevel} />
+                      <DetailRow large label="Note" value={details.note} />
+                    </>
+                  )}
+                  </div>
+                </CardContent>
+              </Card>
+              {/* 4 address quads: Office | Residential | Office Mailing | Res. Mailing */}
+              <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0 transition-[min-height] duration-150 ease-out">
+                <TileHeader tileId="addresses" title="Addresses" />
+                <CardContent className="p-2 grid grid-cols-2 grid-rows-2 gap-2 flex-1 min-h-0 overflow-auto min-h-[300px]">
+                  {editingTile === 'addresses' && editForm ? (
+                    <>
+                      {(['officeAddress', 'residentialAddress', 'officeMailingAddress', 'residentialMailingAddress'] as const).map((key) => (
+                        <Card key={key} className="border border-gray-200 p-2">
+                          <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">{getFieldLabel(key)}</p>
+                          {editForm[key] && (['address', 'city', 'province', 'postal', 'country'] as const).map((f) => (
+                            <div key={f} className="flex items-center gap-2 mb-1">
+                              <Label className="text-xs font-medium text-gray-700 w-16 shrink-0">{getFieldLabel(f)}</Label>
+                              <Input
+                                value={editForm[key]![f] ?? ''}
+                                onChange={(e) => setEditForm({ ...editForm, [key]: { ...editForm[key], [f]: e.target.value } })}
+                                className="h-6 text-xs flex-1"
+                              />
+                            </div>
+                          ))}
+                        </Card>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <Card className="border border-gray-200 shadow-sm p-2 min-h-0">
+                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Office</p>
+                        <DetailRow large label="Address" value={details.officeAddress.address} />
+                        <DetailRow large label="City" value={details.officeAddress.city} />
+                        <DetailRow large label="Province" value={details.officeAddress.province} />
+                        <DetailRow large label="Postal" value={details.officeAddress.postal} />
+                        <DetailRow large label="Country" value={details.officeAddress.country} />
+                      </Card>
+                      <Card className="border border-gray-200 shadow-sm p-2 min-h-0">
+                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Residential</p>
+                        <DetailRow large label="Address" value={details.residentialAddress.address} />
+                        <DetailRow large label="City" value={details.residentialAddress.city} />
+                        <DetailRow large label="Province" value={details.residentialAddress.province} />
+                        <DetailRow large label="Postal" value={details.residentialAddress.postal} />
+                        <DetailRow large label="Country" value={details.residentialAddress.country} />
+                      </Card>
+                      <Card className="border border-gray-200 shadow-sm p-2 min-h-0">
+                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Office Mailing</p>
+                        <DetailRow large label="Address" value={details.officeMailingAddress.address} />
+                        <DetailRow large label="City" value={details.officeMailingAddress.city} />
+                        <DetailRow large label="Province" value={details.officeMailingAddress.province} />
+                        <DetailRow large label="Postal" value={details.officeMailingAddress.postal} />
+                        <DetailRow large label="Country" value={details.officeMailingAddress.country} />
+                      </Card>
+                      <Card className="border border-gray-200 shadow-sm p-2 min-h-0">
+                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Res. Mailing</p>
+                        <DetailRow large label="Address" value={details.residentialMailingAddress.address} />
+                        <DetailRow large label="City" value={details.residentialMailingAddress.city} />
+                        <DetailRow large label="Province" value={details.residentialMailingAddress.province} />
+                        <DetailRow large label="Postal" value={details.residentialMailingAddress.postal} />
+                        <DetailRow large label="Country" value={details.residentialMailingAddress.country} />
+                      </Card>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+              <div className="grid grid-cols-2 grid-rows-2 gap-2 h-full min-h-0">
+                <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0 transition-[min-height] duration-150 ease-out">
+                  <TileHeader tileId="officeContact" title="Office Contact" />
+                  <CardContent className="px-2 pb-2 flex-1 min-h-0 overflow-auto text-sm min-h-[140px]">
+                    <div className="min-h-[120px] transition-opacity duration-150 ease-out">
+                    {editingTile === 'officeContact' && editForm?.officeContact ? (
+                      <div className="space-y-1.5 text-sm">
+                        {(['phone', 'fax', 'cell', 'email', 'residentialAddress'] as const).map((f) => (
+                          <div key={f} className="flex items-center gap-2">
+                            <Label className="text-sm font-medium text-gray-700 w-28 shrink-0">{getFieldLabel(f)}</Label>
+                            <Input
+                              value={editForm.officeContact[f] ?? ''}
+                              onChange={(e) => setEditForm({ ...editForm, officeContact: { ...editForm.officeContact, [f]: e.target.value } })}
+                              className="h-7 text-sm flex-1"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <>
+                        <DetailRow large label="Phone" value={details.officeContact.phone} />
+                        <DetailRow large label="Fax" value={details.officeContact.fax} />
+                        <DetailRow large label="Cell" value={details.officeContact.cell} />
+                        <DetailRow large label="E-mail" value={details.officeContact.email} />
+                        <DetailRow large label="Residential Address" value={details.officeContact.residentialAddress} />
+                      </>
+                    )}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0 transition-[min-height] duration-150 ease-out">
+                  <TileHeader tileId="homeContact" title="Home Contact" />
+                  <CardContent className="px-2 pb-2 flex-1 min-h-0 overflow-auto text-sm min-h-[140px]">
+                    <div className="min-h-[120px] transition-opacity duration-150 ease-out">
+                    {editingTile === 'homeContact' && editForm?.homeContact ? (
+                      <div className="space-y-1.5 text-sm">
+                        {(['phone', 'fax', 'cell', 'email', 'residentialAddress'] as const).map((f) => (
+                          <div key={f} className="flex items-center gap-2">
+                            <Label className="text-sm font-medium text-gray-700 w-28 shrink-0">{getFieldLabel(f)}</Label>
+                            <Input
+                              value={editForm.homeContact[f] ?? ''}
+                              onChange={(e) => setEditForm({ ...editForm, homeContact: { ...editForm.homeContact, [f]: e.target.value } })}
+                              className="h-7 text-sm flex-1"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <>
+                        <DetailRow large label="Phone" value={details.homeContact.phone} />
+                        <DetailRow large label="Fax" value={details.homeContact.fax} />
+                        <DetailRow large label="Cell" value={details.homeContact.cell} />
+                        <DetailRow large label="E-mail" value={details.homeContact.email} />
+                        <DetailRow large label="Residential Address" value={details.homeContact.residentialAddress} />
+                      </>
+                    )}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0">
+                  <ReadOnlyTileHeader title="Codes (Rep)" />
+                  <CardContent className="px-2 pb-2 flex-1 min-h-0 overflow-auto">
+                    {details.codesUnderRep.map((code, i) => (
+                      <div key={i} className="py-0.5 text-sm text-gray-900 leading-snug whitespace-nowrap">{code}</div>
+                    ))}
+                  </CardContent>
+                </Card>
+                <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0">
+                  <ReadOnlyTileHeader title="Codes (T4A)" />
+                  <CardContent className="px-2 pb-2 flex-1 min-h-0 overflow-auto">
+                    {details.codesUnderT4A.map((code, i) => (
+                      <div key={i} className="py-0.5 text-sm text-gray-900 leading-snug whitespace-nowrap">{code}</div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+            {/* Tiles underneath: 3-column grid aligned with top (Details | Addresses | quads) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 items-start">
+              <div className="flex flex-col gap-2 lg:col-span-2">
+                <Card className="border border-gray-200 shadow-sm w-full p-0">
+                  <ReadOnlyTileHeader title="My Documents" />
+                  <CardContent className="px-3 pb-3">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead className="text-xs h-8 py-1.5">By</TableHead>
+                          <TableHead className="text-xs h-8 py-1.5">Date</TableHead>
+                          <TableHead className="text-xs h-8 py-1.5">Description</TableHead>
+                          <TableHead className="text-xs h-8 py-1.5 w-14">View</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {details.documents.slice(0, 3).map((doc, i) => (
+                          <TableRow key={i} className="border-b border-gray-100">
+                            <TableCell className="text-xs py-1.5">{doc.uploadedBy || '—'}</TableCell>
+                            <TableCell className="text-xs py-1.5">{doc.dateCreated}</TableCell>
+                            <TableCell className="text-xs py-1.5 min-w-[120px]">{doc.description}</TableCell>
+                            <TableCell className="py-1.5"><Button variant="ghost" size="sm" className="h-6 text-xs px-1">View</Button></TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+                <div className="flex flex-row gap-2">
+                  <Card className="border border-gray-200 shadow-sm flex-1 min-w-0 p-0 transition-[min-height] duration-150 ease-out">
+                    <TileHeader tileId="maximums" title="Maximums" />
+                    <CardContent className="px-3 pb-3 min-h-[88px]">
+                      <div className="min-h-[72px] transition-opacity duration-150 ease-out">
+                      {editingTile === 'maximums' && editForm ? (
+                        <div className="space-y-1.5 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-sm font-medium text-gray-700 w-36 shrink-0">Dealer Maximums</Label>
+                            <Input value={editForm.dealerMaximums ?? ''} onChange={(e) => setEditForm({ ...editForm, dealerMaximums: e.target.value })} className="h-7 text-sm flex-1" />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Label className="text-sm font-medium text-gray-700 w-36 shrink-0">Manager Maximums</Label>
+                            <Input value={editForm.managerMaximums ?? ''} onChange={(e) => setEditForm({ ...editForm, managerMaximums: e.target.value })} className="h-7 text-sm flex-1" />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <DetailRow large label="Dealer Maximums" value={details.dealerMaximums} />
+                          <DetailRow large label="Manager Maximums" value={details.managerMaximums} />
+                        </>
+                      )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border border-gray-200 shadow-sm flex-1 min-w-0 p-0">
+                    <ReadOnlyTileHeader title="Photo" />
+                    <CardContent className="w-full min-h-[88px] px-3 pb-3 flex flex-col justify-center items-center">
+                      <div className="flex flex-row items-center justify-center gap-2 flex-wrap w-full">
+                        <Button variant="outline" size="sm" className="h-8 text-sm px-3 shrink-0">+ Choose</Button>
+                        <Button variant="outline" size="sm" className="h-8 text-sm px-3 shrink-0">Upload</Button>
+                        <Button size="sm" className="h-8 text-sm px-3 shrink-0">Update Photo</Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+              <Card className="border border-gray-200 shadow-sm w-full p-0">
+                <CardHeader className="py-1.5 px-3 flex flex-row items-center justify-between gap-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-sm font-semibold">Registrations</CardTitle>
+                    {!canEditTiles && <span className="text-xs text-gray-500 italic">Contact administrator</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Checkbox id="include-inactive" className="h-4 w-4" />
+                    <Label htmlFor="include-inactive" className="text-xs font-normal cursor-pointer">Inactive</Label>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-3 pb-3">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50">
+                        <TableHead className="text-xs h-8 py-1.5">Type</TableHead>
+                        <TableHead className="text-xs h-8 py-1.5">Prov</TableHead>
+                        <TableHead className="text-xs h-8 py-1.5">Number</TableHead>
+                        <TableHead className="text-xs h-8 py-1.5">Start</TableHead>
+                        <TableHead className="text-xs h-8 py-1.5 w-14">File</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {details.registrations.map((reg, i) => (
+                        <TableRow key={i} className="border-b border-gray-100">
+                          <TableCell className="text-xs py-1.5">{reg.type}</TableCell>
+                          <TableCell className="text-xs py-1.5">{reg.province}</TableCell>
+                          <TableCell className="text-xs py-1.5">{reg.number}</TableCell>
+                          <TableCell className="text-xs py-1.5">{reg.startDate}</TableCell>
+                          <TableCell className="py-1.5"><Button variant="ghost" size="sm" className="h-6 text-xs px-1">View</Button></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+            </>
+            )}
+          </>
+        ) : null}
+      </div>
+
+      {/* Reject pending changes modal */}
+      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject changes</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting these changes. This comment may be shared with the submitter.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="reject-comment">Comment (required)</Label>
+              <Textarea
+                id="reject-comment"
+                placeholder="Reason for rejection..."
+                value={rejectComment}
+                onChange={(e) => setRejectComment(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleRejectConfirm} disabled={!rejectComment.trim()}>
+              Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite User modal */}
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invite User</DialogTitle>
+            <DialogDescription>
+              Send an invitation to a new user. They will receive an email to set their password and access the console.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="invite-name">Name</Label>
+              <Input
+                id="invite-name"
+                placeholder="Full name"
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="invite-email">Email</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="email@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Role</Label>
+              <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as UserRole)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {rolesForInvite.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleInviteSubmit}>Send Invite</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Role modal */}
+      <Dialog open={editRoleOpen} onOpenChange={setEditRoleOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Role</DialogTitle>
+            <DialogDescription>
+              Change the role for {selectedUser?.name}. This will update their permissions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>User</Label>
+              <Input value={selectedUser?.name ?? ''} disabled className="bg-gray-50" />
+            </div>
+            <div className="grid gap-2">
+              <Label>Role</Label>
+              <Select value={editRoleValue} onValueChange={(v) => setEditRoleValue(v as UserRole)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {rolesForEdit.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRoleOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditRoleSubmit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disable User modal */}
+      <Dialog open={disableOpen} onOpenChange={setDisableOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Disable User</DialogTitle>
+            <DialogDescription>
+              Disable access for {selectedUser?.name}. They will no longer be able to sign in. You can re-enable them later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600">
+              User: <span className="font-medium text-gray-900">{selectedUser?.name}</span>
+              <br />
+              Email: <span className="text-gray-600">{selectedUser?.email}</span>
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisableOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDisableSubmit}>
+              Disable User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PageLayout>
+  );
+};
+
+export default UsersAccess;

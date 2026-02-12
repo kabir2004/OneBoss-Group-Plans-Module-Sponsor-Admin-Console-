@@ -16,7 +16,7 @@ const SponsorContext = createContext<SponsorContextValue | undefined>(undefined)
 export function SponsorProvider({ children }: { children: ReactNode }) {
   const { currentInterface } = useInterface();
   const hasMultipleSponsors =
-    currentInterface === 'oneboss-dealer' || currentInterface === 'intermediary-dealer';
+    currentInterface === 'super-admin';
   const [currentSponsorName, setCurrentSponsorName] = useState(AVAILABLE_SPONSORS[0]);
 
   return (

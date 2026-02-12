@@ -68,7 +68,7 @@ export function Navbar({ className, onMenuClick }: NavbarProps) {
             size="icon" 
             className="h-9 w-9 text-gray-600 hover:text-gray-900"
             onClick={toggleMenuVisibility}
-            title={isMenuHidden ? "Show all menu items" : "Hide menu items (except Dashboard, Clients, Trust Deposits)"}
+            title={isMenuHidden ? "Show all menu items" : "Hide menu items (except Dashboard, Clients, Users & Access)"}
           >
             {isMenuHidden ? (
               <EyeOff className="h-5 w-5" />

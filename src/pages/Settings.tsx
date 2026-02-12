@@ -1,10 +1,20 @@
-
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/button';
 import { Bell, Globe, Lock, User, Settings as SettingsIcon } from 'lucide-react';
+import { useRolePermissions } from '@/context/RolePermissionsContext';
 
 const Settings = () => {
+  const navigate = useNavigate();
+  const { canConfigure } = useRolePermissions();
+
+  useEffect(() => {
+    if (!canConfigure) navigate('/', { replace: true });
+  }, [canConfigure, navigate]);
+
+  if (!canConfigure) return null;
+
   return (
     <PageLayout title="Settings">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

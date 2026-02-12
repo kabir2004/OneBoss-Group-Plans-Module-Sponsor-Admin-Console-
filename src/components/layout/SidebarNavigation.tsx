@@ -15,6 +15,7 @@ import {
 import {
   LayoutDashboard,
   Users,
+  UserCog,
   FileText,
   BriefcaseBusiness,
   ShieldCheck,
@@ -38,13 +39,17 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  FileEdit,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CLIENTS } from '@/pages/Clients';
+import { useRepresentativesSearch } from '@/context/RepresentativesSearchContext';
 import { getInterfaceDisplayName } from '@/components/InterfaceSwitcher';
 import { useInterface } from '@/context/InterfaceContext';
 import { useMenuVisibility } from '@/context/MenuVisibilityContext';
+import { useRolePermissions } from '@/context/RolePermissionsContext';
+import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
 
 // OneBoss menu items
 const oneBossMenuItems = [
@@ -59,9 +64,14 @@ const oneBossMenuItems = [
     path: '/clients',
   },
   {
-    title: 'Trust Deposits',
-    icon: Wallet,
-    path: '/trust-deposits',
+    title: 'Users & Access',
+    icon: UserCog,
+    path: '/users-access',
+  },
+  {
+    title: 'Tombstone',
+    icon: FileEdit,
+    path: '/tombstone',
   },
   {
     title: 'Plans',
@@ -128,6 +138,16 @@ const legacyMenuItems = [
     path: '/clients',
   },
   {
+    title: 'Users & Access',
+    icon: UserCog,
+    path: '/users-access',
+  },
+  {
+    title: 'Tombstone',
+    icon: FileEdit,
+    path: '/tombstone',
+  },
+  {
     title: 'Plans',
     icon: FileText,
     path: '/plans',
@@ -158,10 +178,14 @@ export function SidebarNavigation() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isClientsExpanded, setIsClientsExpanded] = useState(false);
+  const [isUsersAccessExpanded, setIsUsersAccessExpanded] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const { currentInterface, isIntermediaryInterface } = useInterface();
+  const { representativesList, selectedRepresentativeId, setSelectedRepresentativeId } = useRepresentativesSearch();
   const { isMenuHidden } = useMenuVisibility();
   const { state, toggleSidebar } = useSidebar();
+  const { canManageUsers, canViewUsersAccess, canConfigure, canApproveChanges } = useRolePermissions();
+  const { repIdsWithPendingChanges } = usePendingMemberChanges();
 
   // Auto-expand clients dropdown when on clients page, client details page, or related pages
   useEffect(() => {
@@ -181,6 +205,11 @@ export function SidebarNavigation() {
     }
   }, [location.pathname]);
 
+  // Auto-expand Users & Access dropdown when on that page
+  useEffect(() => {
+    if (location.pathname === '/users-access') setIsUsersAccessExpanded(true);
+  }, [location.pathname]);
+
   // Set selected client ID from URL when on client details page
   useEffect(() => {
     if (location.pathname.startsWith('/clients/')) {
@@ -194,17 +223,21 @@ export function SidebarNavigation() {
   }, [location.pathname]);
 
 
-  // Use OneBoss menu items for OneBoss interfaces, legacy for others
-  let menuItems = (currentInterface === 'oneboss-dealer' || currentInterface === 'oneboss-advisor') 
-    ? oneBossMenuItems 
+  // Use OneBoss menu for Super Administrator and Administrator, legacy for Administrator Assistant
+  let menuItems = (currentInterface === 'super-admin' || currentInterface === 'admin')
+    ? oneBossMenuItems
     : legacyMenuItems;
 
-  // Filter menu items when visibility is hidden - only show Dashboard, Clients, and Trust Deposits
+  // Role-based: hide Users & Access only if cannot view; hide Settings if no configure permission
+  if (!canViewUsersAccess) menuItems = menuItems.filter((item) => item.path !== '/users-access');
+  if (!canConfigure) menuItems = menuItems.filter((item) => item.path !== '/settings');
+
+  // Filter menu items when visibility is hidden - only show Dashboard, Clients, and Users & Access
   if (isMenuHidden) {
     menuItems = menuItems.filter(item => 
       item.path === '/' || 
       item.path === '/clients' || 
-      item.path === '/trust-deposits'
+      item.path === '/users-access'
     );
   }
 
@@ -256,6 +289,7 @@ export function SidebarNavigation() {
                 const isActive = location.pathname === item.path;
                 const Icon = item.icon;
                 const isClients = item.path === '/clients';
+                const isUsersAccess = item.path === '/users-access';
                 
                 return (
                   <SidebarMenuItem key={item.path}>
@@ -264,6 +298,9 @@ export function SidebarNavigation() {
                         onClick={() => {
                           if (isClients) {
                             setIsClientsExpanded(!isClientsExpanded);
+                            navigate(item.path);
+                          } else if (isUsersAccess) {
+                            setIsUsersAccessExpanded(!isUsersAccessExpanded);
                             navigate(item.path);
                           } else {
                             navigate(item.path);
@@ -282,6 +319,15 @@ export function SidebarNavigation() {
                         {isClients && (
                           <span className="ml-auto group-data-[collapsible=icon]:hidden">
                             {isClientsExpanded ? (
+                              <ChevronUp className="h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3" />
+                            )}
+                          </span>
+                        )}
+                        {isUsersAccess && (
+                          <span className="ml-auto group-data-[collapsible=icon]:hidden">
+                            {isUsersAccessExpanded ? (
                               <ChevronUp className="h-3 w-3" />
                             ) : (
                               <ChevronDown className="h-3 w-3" />
@@ -334,15 +380,17 @@ export function SidebarNavigation() {
                               <HandCoins className="h-3 w-3 mr-1.5" />
                               Income Plans
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full h-7 text-xs"
-                              onClick={() => navigate('/approvals')}
-                            >
-                              <CheckCircle2 className="h-3 w-3 mr-1.5" />
-                              Approvals
-                            </Button>
+                            {canApproveChanges && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full h-7 text-xs"
+                                onClick={() => navigate('/approvals')}
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-1.5" />
+                                Approvals
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="outline"
@@ -377,6 +425,48 @@ export function SidebarNavigation() {
                                           client.status === 'Active' ? 'bg-green-500' :
                                           client.status === 'Inactive' ? 'bg-gray-400' :
                                           'bg-yellow-500'
+                                        }`} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        </div>
+                      )}
+
+                      {isUsersAccess && (
+                        <div className={`mx-2 mt-1 space-y-1 group-data-[collapsible=icon]:hidden clients-dropdown-container ${
+                          isUsersAccessExpanded ? 'clients-expanded' : 'clients-collapsed'
+                        }`}>
+                          <div className="mt-2 border border-gray-200 rounded-lg bg-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden">
+                            <ScrollArea className="h-[400px]">
+                              <div className="space-y-0.5 p-2">
+                                {representativesList.map((rep) => {
+                                  const isSelected = selectedRepresentativeId === rep.id;
+                                  const hasPending = repIdsWithPendingChanges.includes(rep.id);
+                                  return (
+                                    <div
+                                      key={rep.id}
+                                      onClick={() => setSelectedRepresentativeId(rep.id)}
+                                      className={`flex items-center justify-between p-2 rounded-md text-xs cursor-pointer transition-colors ${
+                                        isSelected
+                                          ? 'bg-gray-100 border border-gray-300'
+                                          : 'hover:bg-gray-50 border border-transparent'
+                                      }`}
+                                    >
+                                      <div className="flex-1 min-w-0 truncate text-gray-900 font-medium flex items-center gap-1.5">
+                                        <span className="truncate">{rep.name}</span>
+                                        {hasPending && (
+                                          <span className="flex-shrink-0 px-1.5 py-0 rounded text-[10px] font-medium bg-amber-100 text-amber-800" title="Pending review">
+                                            Review
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="ml-2 flex-shrink-0">
+                                        <div className={`h-2 w-2 rounded-full ${
+                                          rep.status === 'Active' ? 'bg-green-500' : 'bg-gray-400'
                                         }`} />
                                       </div>
                                     </div>

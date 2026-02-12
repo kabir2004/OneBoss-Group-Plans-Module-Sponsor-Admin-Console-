@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Clients from "./pages/Clients";
 import ClientDetails from "./pages/ClientDetails";
+import UsersAccess from "./pages/UsersAccess";
 import Plans from "./pages/Plans";
 import AccountsTrades from "./pages/AccountsTrades";
 import Compliance from "./pages/Compliance";
@@ -21,10 +22,16 @@ import IncomePlans from "./pages/IncomePlans";
 import Approvals from "./pages/Approvals";
 import Reports from "./pages/Reports";
 import AdvancedSearch from "./pages/AdvancedSearch";
+import TombstoneWorkflow from "./pages/TombstoneWorkflow";
 import { AuthProvider } from "./context/AuthContext";
+import { AuditLogProvider } from "./context/AuditLogContext";
+import { TombstoneProvider } from "./context/TombstoneContext";
+import { RepresentativesSearchProvider } from "./context/RepresentativesSearchContext";
+import { PendingMemberChangesProvider } from "./context/PendingMemberChangesContext";
 import { InterfaceProvider } from "./context/InterfaceContext";
 import { SponsorProvider } from "./context/SponsorContext";
 import { MenuVisibilityProvider } from "./context/MenuVisibilityContext";
+import { RolePermissionsProvider } from "./context/RolePermissionsContext";
 
 const queryClient = new QueryClient();
 
@@ -71,6 +78,9 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <AuthProvider value={{ signOut: handleSignOut }}>
           <InterfaceProvider>
+            <RolePermissionsProvider>
+            <AuditLogProvider>
+            <TombstoneProvider>
             <SponsorProvider>
             <MenuVisibilityProvider>
               <TooltipProvider>
@@ -78,10 +88,13 @@ const App = () => {
               <Sonner />
               {isAuthenticated ? (
                 <BrowserRouter>
+                  <RepresentativesSearchProvider>
+                  <PendingMemberChangesProvider>
                   <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/clients" element={<Clients />} />
                   <Route path="/clients/:id" element={<ClientDetails />} />
+                  <Route path="/users-access" element={<UsersAccess />} />
                   <Route path="/plans" element={<Plans />} />
                   <Route path="/accounts-trades" element={<AccountsTrades />} />
                   <Route path="/compliance" element={<Compliance />} />
@@ -93,9 +106,12 @@ const App = () => {
                   <Route path="/approvals" element={<Approvals />} />
                   <Route path="/reports" element={<Reports />} />
                   <Route path="/advanced-search" element={<AdvancedSearch />} />
+                  <Route path="/tombstone" element={<TombstoneWorkflow />} />
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
+                  </PendingMemberChangesProvider>
+                  </RepresentativesSearchProvider>
                 </BrowserRouter>
               ) : (
                 <SignIn onSignIn={handleSignIn} />
@@ -103,6 +119,9 @@ const App = () => {
               </TooltipProvider>
             </MenuVisibilityProvider>
             </SponsorProvider>
+            </TombstoneProvider>
+            </AuditLogProvider>
+            </RolePermissionsProvider>
           </InterfaceProvider>
         </AuthProvider>
     </QueryClientProvider>

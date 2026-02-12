@@ -5,17 +5,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { History, Filter } from 'lucide-react';
-
-const auditEntries = [
-  { action: 'Trade Submitted', detail: 'Buy order • AGF Balanced', user: 'Antoine Marsh', timestamp: 'Today • 2:45 PM', type: 'Trade' },
-  { action: 'Plan Edited', detail: 'Allocation update • Williams Education Savings', user: 'Sonia Patel', timestamp: 'Yesterday • 4:10 PM', type: 'Plan' },
-  { action: 'Client Created', detail: 'Davis Tax-Free Account', user: 'Antoine Marsh', timestamp: 'Yesterday • 9:22 AM', type: 'Client' },
-  { action: 'Trade Approved', detail: 'Switch order • Maple Leaf Holdings', user: 'Compliance Desk', timestamp: 'Nov 8 • 3:52 PM', type: 'Compliance' },
-  { action: 'Password Reset', detail: 'User credential refresh', user: 'Support Desk', timestamp: 'Nov 6 • 10:07 AM', type: 'Security' },
-  { action: 'Document Expired', detail: 'Suitability assessment • Brown Emergency Fund', user: 'System', timestamp: 'Nov 4 • 6:00 AM', type: 'System' },
-];
+import { useAuditLog } from '@/context/AuditLogContext';
 
 const AuditLog = () => {
+  const { entries: auditEntries } = useAuditLog();
+
   return (
     <PageLayout title="Audit Log & Activity">
       <Card className="border border-gray-200 shadow-sm bg-white">
@@ -42,6 +36,7 @@ const AuditLog = () => {
                 <SelectItem value="document">Documents</SelectItem>
                 <SelectItem value="compliance">Compliance</SelectItem>
                 <SelectItem value="security">Security</SelectItem>
+                <SelectItem value="tombstone">Tombstone</SelectItem>
               </SelectContent>
             </Select>
             <Select defaultValue="30days">

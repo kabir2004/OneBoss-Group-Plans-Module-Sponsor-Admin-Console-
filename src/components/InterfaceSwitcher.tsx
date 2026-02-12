@@ -10,12 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useInterface } from '@/context/InterfaceContext';
 
-export type InterfaceType = 
-  | 'intermediary-dealer'
-  | 'intermediary-advisor'
-  | 'intermediary-client'
-  | 'oneboss-dealer'
-  | 'oneboss-advisor';
+export type InterfaceType = 'super-admin' | 'admin' | 'admin-assistant';
 
 interface InterfaceOption {
   id: InterfaceType;
@@ -24,49 +19,23 @@ interface InterfaceOption {
 }
 
 const interfaceOptions: InterfaceOption[] = [
-  {
-    id: 'intermediary-dealer',
-    label: 'Intermediary Customer: Dealer',
-    available: true,
-  },
-  {
-    id: 'intermediary-advisor',
-    label: 'Intermediary Customer: Advisor',
-    available: true,
-  },
-  {
-    id: 'intermediary-client',
-    label: 'Intermediary Customer: Client',
-    available: false, // To be built later
-  },
-  {
-    id: 'oneboss-dealer',
-    label: 'OneBoss Dealer',
-    available: true,
-  },
-  {
-    id: 'oneboss-advisor',
-    label: 'OneBoss Advisor',
-    available: true,
-  },
+  { id: 'super-admin', label: 'Super Administrator', available: true },
+  { id: 'admin', label: 'Administrator', available: true },
+  { id: 'admin-assistant', label: 'Administrator Assistant', available: true },
 ];
 
 export const getInterfaceDisplayName = (interfaceType: InterfaceType): string => {
   const option = interfaceOptions.find(opt => opt.id === interfaceType);
-  return option?.label || 'OneBoss RepWeb';
+  return option?.label || 'Administrator';
 };
 
 const getInterfaceColor = (interfaceType: InterfaceType): string => {
   switch (interfaceType) {
-    case 'oneboss-advisor':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-    case 'oneboss-dealer':
+    case 'super-admin':
       return 'bg-green-100 text-green-700 border-green-200';
-    case 'intermediary-advisor':
-      return 'bg-purple-100 text-purple-700 border-purple-200';
-    case 'intermediary-dealer':
-      return 'bg-orange-100 text-orange-700 border-orange-200';
-    case 'intermediary-client':
+    case 'admin':
+      return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'admin-assistant':
       return 'bg-gray-100 text-gray-700 border-gray-200';
     default:
       return 'bg-gray-100 text-gray-700 border-gray-200';
@@ -81,10 +50,6 @@ export function InterfaceSwitcher() {
     const option = interfaceOptions.find(opt => opt.id === interfaceType);
     if (option?.available) {
       setCurrentInterface(interfaceType);
-      // Navigate to dashboard when switching to intermediary interface
-      if (interfaceType.startsWith('intermediary-')) {
-        window.location.href = '/';
-      }
     }
   };
 
@@ -137,9 +102,6 @@ export function InterfaceSwitcher() {
                 <span>{option.label}</span>
                 {currentInterface === option.id && option.available && (
                   <Check className="h-4 w-4 text-blue-600" />
-                )}
-                {!option.available && (
-                  <span className="text-xs text-gray-400">(Coming Soon)</span>
                 )}
               </button>
             ))}

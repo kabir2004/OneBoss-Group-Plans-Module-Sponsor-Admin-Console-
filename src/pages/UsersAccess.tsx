@@ -33,7 +33,7 @@ import {
 import { UserPlus, Pencil, UserX, Save, X } from 'lucide-react';
 import { useRepresentativesSearch } from '@/context/RepresentativesSearchContext';
 import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
-import type { ProposedMemberEdits } from '@/context/PendingMemberChangesContext';
+import type { ProposedMemberEdits, PendingChange, SubmitterRole } from '@/context/PendingMemberChangesContext';
 import { CLIENTS } from '@/pages/Clients';
 import { getRepresentativeDetails } from '@/data/representativeDetails';
 import type { RepDetails } from '@/data/representativeDetails';
@@ -223,8 +223,8 @@ const UsersAccess = () => {
   const canEditTiles = (isAdmin || isAdminAssistant || isSuperAdmin) && !showDiffView;
   /** Administrator Assistant can only edit Addresses, Office Contact, Home Contact; not Details or Maximums. */
   const canEditTile = (tileId: TileId) => canEditTiles && (!isAdminAssistant || (tileId !== 'details' && tileId !== 'maximums'));
-  /** Only the submitting role (Administrator) sees "Changes pending approval"; Administrator Assistant approves, so not applicable to them. */
-  const showPendingBanner = isAdmin && pending;
+  /** Submitter sees "Changes pending approval": Administrator or Administrator Assistant when they have pending changes. */
+  const showPendingBanner = pending && (isAdmin || isAdminAssistant);
 
   const handleStartEditTile = (tileId: TileId) => {
     if (!details) return;
@@ -296,7 +296,27 @@ const UsersAccess = () => {
     setRejectComment('');
   };
 
-  function DiffView({ current, proposed }: { current: RepDetails; proposed: ProposedMemberEdits }) {
+  const submitterLabel = (role?: SubmitterRole | null): string => {
+    if (!role) return 'Unknown';
+    const map: Record<SubmitterRole, string> = {
+      'admin': 'Administrator',
+      'admin-assistant': 'Administrator Assistant',
+      'super-admin': 'Super Administrator',
+    };
+    return map[role] ?? role;
+  };
+
+  const formatSubmittedAt = (iso?: string): string => {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, { dateStyle: 'medium' }) + ' at ' + d.toLocaleTimeString(undefined, { timeStyle: 'short' });
+    } catch {
+      return iso;
+    }
+  };
+
+  function DiffView({ current, proposed, pending }: { current: RepDetails; proposed: ProposedMemberEdits; pending: PendingChange | null }) {
     const allRows: { label: string; current: string; proposed: string; group: string }[] = [];
     const push = (group: string, label: string, curr: string | undefined, prop: string | undefined) => {
       if (prop === undefined) return;
@@ -314,20 +334,46 @@ const UsersAccess = () => {
     push('Maximums', 'Manager Maximums', current.managerMaximums, proposed.managerMaximums);
     if (proposed.officeContact) {
       push('Office contact', 'Phone', current.officeContact.phone, proposed.officeContact.phone);
+      push('Office contact', 'Fax', current.officeContact.fax, proposed.officeContact.fax);
+      push('Office contact', 'Cell', current.officeContact.cell, proposed.officeContact.cell);
       push('Office contact', 'E-mail', current.officeContact.email, proposed.officeContact.email);
+      push('Office contact', 'Residential Address', current.officeContact.residentialAddress, proposed.officeContact.residentialAddress);
     }
     if (proposed.homeContact) {
       push('Home contact', 'Phone', current.homeContact.phone, proposed.homeContact.phone);
+      push('Home contact', 'Fax', current.homeContact.fax, proposed.homeContact.fax);
+      push('Home contact', 'Cell', current.homeContact.cell, proposed.homeContact.cell);
       push('Home contact', 'E-mail', current.homeContact.email, proposed.homeContact.email);
+      push('Home contact', 'Residential Address', current.homeContact.residentialAddress, proposed.homeContact.residentialAddress);
     }
-    // Only show fields that actually changed
+    const addrFields = ['address', 'city', 'province', 'postal', 'country'] as const;
+    if (proposed.officeAddress) {
+      for (const f of addrFields) {
+        push('Office address', f.charAt(0).toUpperCase() + f.slice(1), current.officeAddress?.[f], proposed.officeAddress?.[f]);
+      }
+    }
+    if (proposed.residentialAddress) {
+      for (const f of addrFields) {
+        push('Residential address', f.charAt(0).toUpperCase() + f.slice(1), current.residentialAddress?.[f], proposed.residentialAddress?.[f]);
+      }
+    }
+    if (proposed.officeMailingAddress) {
+      for (const f of addrFields) {
+        push('Office mailing address', f.charAt(0).toUpperCase() + f.slice(1), current.officeMailingAddress?.[f], proposed.officeMailingAddress?.[f]);
+      }
+    }
+    if (proposed.residentialMailingAddress) {
+      for (const f of addrFields) {
+        push('Residential mailing address', f.charAt(0).toUpperCase() + f.slice(1), current.residentialMailingAddress?.[f], proposed.residentialMailingAddress?.[f]);
+      }
+    }
     const changedRows = allRows.filter((r) => r.current !== r.proposed);
     const byGroup = changedRows.reduce<Record<string, typeof changedRows>>((acc, r) => {
       if (!acc[r.group]) acc[r.group] = [];
       acc[r.group].push(r);
       return acc;
     }, {});
-    const groupOrder = ['Personal', 'Dates', 'Service', 'Maximums', 'Office contact', 'Home contact'];
+    const groupOrder = ['Personal', 'Dates', 'Service', 'Maximums', 'Office contact', 'Home contact', 'Office address', 'Residential address', 'Office mailing address', 'Residential mailing address'];
     const groupLabels: Record<string, string> = {
       Personal: 'Personal details',
       Dates: 'Dates',
@@ -335,36 +381,64 @@ const UsersAccess = () => {
       Maximums: 'Maximums',
       'Office contact': 'Office contact',
       'Home contact': 'Home contact',
+      'Office address': 'Office address',
+      'Residential address': 'Residential address',
+      'Office mailing address': 'Office mailing address',
+      'Residential mailing address': 'Residential mailing address',
     };
 
     return (
-      <Card className="border border-gray-200 mb-2">
-        <CardHeader className="py-2 px-3">
-          <CardTitle className="text-sm font-semibold">Proposed changes</CardTitle>
-          <p className="text-xs text-gray-500 font-normal mt-0.5">Only fields with changes are listed.</p>
+      <Card className="border border-amber-200/80 bg-amber-50/30 mb-2">
+        <CardHeader className="py-3 px-3 border-b border-amber-200/60">
+          <CardTitle className="text-sm font-semibold text-gray-900">Proposed Changes — Review Before Approving</CardTitle>
+          {pending && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+              <span><strong>Submitted by:</strong> {submitterLabel(pending.submittedByRole)}</span>
+              <span><strong>Submitted at:</strong> {formatSubmittedAt(pending.submittedAt)}</span>
+              <span><strong>Changes:</strong> {changedRows.length} field{changedRows.length !== 1 ? 's' : ''} modified</span>
+            </div>
+          )}
+          <p className="text-xs text-gray-500 font-normal mt-1.5">Only modified fields are listed. <span className="text-red-600">Current value</span> → <span className="text-green-700 font-medium">Proposed value</span>.</p>
         </CardHeader>
-        <CardContent className="px-3 pb-3 pt-0">
+        <CardContent className="px-3 pb-3 pt-3">
           {changedRows.length === 0 ? (
             <p className="text-xs text-gray-500 py-2">No field changes in this submission.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {groupOrder.map((group) => {
                 const rows = byGroup[group];
                 if (!rows?.length) return null;
                 return (
-                  <div key={group} className="rounded border border-gray-100 bg-gray-50/50 overflow-hidden">
-                    <div className="px-2.5 py-1 bg-gray-100/80 border-b border-gray-100 text-xs font-medium text-gray-700">
-                      {groupLabels[group]}
+                  <div key={group} className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 border-b border-gray-200">
+                      <span className="h-1 w-1 rounded-full bg-gray-500" aria-hidden />
+                      <span className="text-sm font-semibold text-gray-800">{groupLabels[group] ?? group}</span>
                     </div>
-                    <dl className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-3 gap-y-0.5 text-sm px-2.5 py-1.5">
-                      {rows.map((r, i) => (
-                        <Fragment key={i}>
-                          <dt className="text-gray-600 truncate">{r.label}</dt>
-                          <dd className="text-red-600 line-through text-right whitespace-nowrap">{r.current || '—'}</dd>
-                          <dd className="text-green-700 font-medium text-right whitespace-nowrap min-w-[6rem]">{r.proposed || '—'}</dd>
-                        </Fragment>
-                      ))}
-                    </dl>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+                        <colgroup>
+                          <col style={{ width: '11rem' }} />
+                          <col style={{ width: '40%' }} />
+                          <col style={{ width: '40%' }} />
+                        </colgroup>
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Field</th>
+                            <th className="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-red-600">Current value</th>
+                            <th className="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-green-700">Proposed value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((r, i) => (
+                            <tr key={i} className="border-t border-gray-100">
+                              <td className="py-2.5 px-4 text-gray-700 font-medium align-top">{r.label}</td>
+                              <td className="py-2.5 px-4 text-red-600 line-through align-top break-words">{r.current || '—'}</td>
+                              <td className="py-2.5 px-4 text-green-700 font-semibold align-top break-words bg-green-50/50">{r.proposed || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 );
               })}
@@ -526,7 +600,7 @@ const UsersAccess = () => {
               </div>
             )}
             {showDiffView && pending ? (
-              <DiffView current={details} proposed={pending.proposed} />
+              <DiffView current={details} proposed={pending.proposed} pending={pending} />
             ) : (
             <>
             {/* Top row: Details | Addresses | 4 quads (Office Contact, Home Contact, Codes Rep, Codes T4A) */}

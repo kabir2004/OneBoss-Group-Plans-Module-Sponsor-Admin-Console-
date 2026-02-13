@@ -45,6 +45,7 @@ import { useInterface } from '@/context/InterfaceContext';
 import { useMenuVisibility } from '@/context/MenuVisibilityContext';
 import { useRolePermissions } from '@/context/RolePermissionsContext';
 import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
+import { useAddMemberModal } from '@/context/AddMemberModalContext';
 
 // OneBoss menu items
 const oneBossMenuItems = [
@@ -144,8 +145,9 @@ export function SidebarNavigation() {
   const { representativesList, selectedRepresentativeId, setSelectedRepresentativeId } = useRepresentativesSearch();
   const { isMenuHidden } = useMenuVisibility();
   const { state, toggleSidebar } = useSidebar();
-  const { canManageUsers, canViewUsersAccess, canConfigure, canApproveChanges } = useRolePermissions();
+  const { canManageUsers, canViewUsersAccess, canConfigure, canApproveChanges, isSuperAdmin, isAdmin } = useRolePermissions();
   const { repIdsWithPendingChanges } = usePendingMemberChanges();
+  const { openAddMemberModal } = useAddMemberModal();
 
   // Auto-expand clients dropdown when on clients page, client details page, or related pages
   useEffect(() => {
@@ -400,6 +402,40 @@ export function SidebarNavigation() {
                         <div className={`mx-2 mt-1 space-y-1 group-data-[collapsible=icon]:hidden clients-dropdown-container ${
                           isUsersAccessExpanded ? 'clients-expanded' : 'clients-collapsed'
                         }`}>
+                          {(isSuperAdmin || isAdmin) && (
+                            <div className="space-y-1.5 px-1">
+                              {isSuperAdmin && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => navigate('/users-access?invite=Administrator')}
+                                  className="w-full h-7 text-xs bg-white hover:bg-gray-50 text-gray-700 border border-gray-300"
+                                >
+                                  <Plus className="h-3 w-3 mr-1.5" />
+                                  Administrator
+                                </Button>
+                              )}
+                              {isAdmin && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => navigate('/users-access?invite=Administrator+Assistant')}
+                                  className="w-full h-7 text-xs bg-white hover:bg-gray-50 text-gray-700 border border-gray-300"
+                                >
+                                  <Plus className="h-3 w-3 mr-1.5" />
+                                  Administrator Assistant
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                          <div className="space-y-1.5 px-1">
+                            <Button
+                              size="sm"
+                              onClick={openAddMemberModal}
+                              className="w-full h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              <Plus className="h-3 w-3 mr-1.5" />
+                              Members
+                            </Button>
+                          </div>
                           <div className="mt-2 border border-gray-200 rounded-lg bg-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden">
                             <ScrollArea className="h-[400px]">
                               <div className="space-y-0.5 p-2">

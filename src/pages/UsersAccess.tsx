@@ -1,5 +1,5 @@
 import { Fragment, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { useRolePermissions } from '@/context/RolePermissionsContext';
 import { Button } from '@/components/ui/button';
@@ -92,6 +92,7 @@ const getFieldLabel = (key: string) => FIELD_LABELS[key] ?? key.replace(/([A-Z])
 
 const UsersAccess = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { canManageUsers, canViewUsersAccess, canManageAdmins, isAdmin, isAdminAssistant, isSuperAdmin, role } = useRolePermissions();
   const {
     getEffectiveDetails,
@@ -116,6 +117,8 @@ const UsersAccess = () => {
   const [editForm, setEditForm] = useState<ProposedMemberEdits | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
+  const [inviteSentOpen, setInviteSentOpen] = useState(false);
+  const [inviteSentInfo, setInviteSentInfo] = useState<{ name: string; email: string; role: UserRole } | null>(null);
 
   const { setRepresentativesCount, setRepresentativesList, selectedRepresentativeId } = useRepresentativesSearch();
 
@@ -128,21 +131,42 @@ const UsersAccess = () => {
     setRepresentativesList(CLIENTS.map((c) => ({ id: c.id, name: c.name, status: c.status })));
   }, [setRepresentativesCount, setRepresentativesList]);
 
+  // Open invite modal with role when navigating from sidebar "+ Administrator" / "+ Administrator Assistant"
+  useEffect(() => {
+    const inviteRoleParam = searchParams.get('invite');
+    if (!inviteRoleParam) return;
+    const roleMap: Record<string, UserRole> = {
+      'Administrator': 'Administrator',
+      'Administrator+Assistant': 'Administrator Assistant',
+      'Administrator Assistant': 'Administrator Assistant',
+    };
+    const mappedRole = roleMap[inviteRoleParam];
+    // Super Admin can invite Administrator or Administrator Assistant; Administrator can only invite Administrator Assistant
+    if (mappedRole && (canManageAdmins || mappedRole === 'Administrator Assistant')) {
+      setInviteRole(mappedRole);
+      setInviteOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, canManageAdmins, setSearchParams]);
+
   if (!canViewUsersAccess) return null;
 
   // Administrator Assistant can only manage Administrator Assistants; Super Admin can manage everyone
-  const rolesForInvite = canManageAdmins ? ROLES : [ASSISTANT_ROLE];
+  // Super Admin can only invite Administrator or Administrator Assistant (not another Super Administrator)
+  const rolesForInvite = canManageAdmins ? (ROLES.filter((r) => r !== 'Super Administrator')) : [ASSISTANT_ROLE];
   const canEditUser = (user: User) => canManageAdmins || user.role === ASSISTANT_ROLE;
   const rolesForEdit = canManageAdmins ? ROLES : [ASSISTANT_ROLE];
 
   const handleInviteSubmit = () => {
     if (!inviteName.trim() || !inviteEmail.trim()) return;
+    const name = inviteName.trim();
+    const email = inviteEmail.trim();
     setUsers((prev) => [
       ...prev,
       {
         id: String(prev.length + 1),
-        name: inviteName.trim(),
-        email: inviteEmail.trim(),
+        name,
+        email,
         role: inviteRole,
         status: 'Active',
       },
@@ -151,6 +175,8 @@ const UsersAccess = () => {
     setInviteEmail('');
     setInviteRole(ASSISTANT_ROLE);
     setInviteOpen(false);
+    setInviteSentInfo({ name, email, role: inviteRole });
+    setInviteSentOpen(true);
   };
 
   const openEditRole = (user: User) => {
@@ -658,22 +684,6 @@ const UsersAccess = () => {
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0">
-                  <ReadOnlyTileHeader title="Codes (Rep)" />
-                  <CardContent className="px-2 pb-2 flex-1 min-h-0 overflow-auto">
-                    {details.codesUnderRep.map((code, i) => (
-                      <div key={i} className="py-0.5 text-sm text-gray-900 leading-snug whitespace-nowrap">{code}</div>
-                    ))}
-                  </CardContent>
-                </Card>
-                <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0">
-                  <ReadOnlyTileHeader title="Codes (T4A)" />
-                  <CardContent className="px-2 pb-2 flex-1 min-h-0 overflow-auto">
-                    {details.codesUnderT4A.map((code, i) => (
-                      <div key={i} className="py-0.5 text-sm text-gray-900 leading-snug whitespace-nowrap">{code}</div>
-                    ))}
-                  </CardContent>
-                </Card>
               </div>
             </div>
             {/* Tiles underneath: 3-column grid aligned with top (Details | Addresses | quads) */}
@@ -741,42 +751,6 @@ const UsersAccess = () => {
                   </Card>
                 </div>
               </div>
-              <Card className="border border-gray-200 shadow-sm w-full p-0">
-                <CardHeader className="py-1.5 px-3 flex flex-row items-center justify-between gap-2 border-b border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-sm font-semibold">Registrations</CardTitle>
-                    {!canEditTiles && <span className="text-xs text-gray-500 italic">Contact administrator</span>}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Checkbox id="include-inactive" className="h-4 w-4" />
-                    <Label htmlFor="include-inactive" className="text-xs font-normal cursor-pointer">Inactive</Label>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-3 pb-3">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50">
-                        <TableHead className="text-xs h-8 py-1.5">Type</TableHead>
-                        <TableHead className="text-xs h-8 py-1.5">Prov</TableHead>
-                        <TableHead className="text-xs h-8 py-1.5">Number</TableHead>
-                        <TableHead className="text-xs h-8 py-1.5">Start</TableHead>
-                        <TableHead className="text-xs h-8 py-1.5 w-14">File</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {details.registrations.map((reg, i) => (
-                        <TableRow key={i} className="border-b border-gray-100">
-                          <TableCell className="text-xs py-1.5">{reg.type}</TableCell>
-                          <TableCell className="text-xs py-1.5">{reg.province}</TableCell>
-                          <TableCell className="text-xs py-1.5">{reg.number}</TableCell>
-                          <TableCell className="text-xs py-1.5">{reg.startDate}</TableCell>
-                          <TableCell className="py-1.5"><Button variant="ghost" size="sm" className="h-6 text-xs px-1">View</Button></TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
             </div>
             </>
             )}
@@ -848,18 +822,27 @@ const UsersAccess = () => {
             </div>
             <div className="grid gap-2">
               <Label>Role</Label>
-              <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as UserRole)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {rolesForInvite.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {role}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {canManageAdmins ? (
+                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as UserRole)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rolesForInvite.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <>
+                  <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 px-3 text-sm font-medium text-gray-800">
+                    {ASSISTANT_ROLE}
+                  </div>
+                  <p className="text-xs text-gray-500">You can only invite users as Administrator Assistant.</p>
+                </>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -867,6 +850,37 @@ const UsersAccess = () => {
               Cancel
             </Button>
             <Button onClick={handleInviteSubmit}>Send Invite</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite sent confirmation */}
+      <Dialog open={inviteSentOpen} onOpenChange={(open) => { setInviteSentOpen(open); if (!open) setInviteSentInfo(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invite sent</DialogTitle>
+            <DialogDescription>
+              An invitation has been sent. The following user will receive an email to set their password and access the console.
+            </DialogDescription>
+          </DialogHeader>
+          {inviteSentInfo && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50/80 py-3 px-4 space-y-2">
+              <div className="flex justify-between gap-2 text-sm">
+                <span className="text-gray-500">Name</span>
+                <span className="font-medium text-gray-900">{inviteSentInfo.name}</span>
+              </div>
+              <div className="flex justify-between gap-2 text-sm">
+                <span className="text-gray-500">Email</span>
+                <span className="font-medium text-gray-900">{inviteSentInfo.email}</span>
+              </div>
+              <div className="flex justify-between gap-2 text-sm">
+                <span className="text-gray-500">Role</span>
+                <span className="font-medium text-gray-900">{inviteSentInfo.role}</span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => { setInviteSentOpen(false); setInviteSentInfo(null); }}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

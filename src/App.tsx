@@ -25,6 +25,7 @@ import { InterfaceProvider } from "./context/InterfaceContext";
 import { SponsorProvider } from "./context/SponsorContext";
 import { MenuVisibilityProvider } from "./context/MenuVisibilityContext";
 import { RolePermissionsProvider } from "./context/RolePermissionsContext";
+import { AddMemberModalProvider } from "./context/AddMemberModalContext";
 
 const queryClient = new QueryClient();
 
@@ -79,6 +80,7 @@ const App = () => {
               <Sonner />
               {isAuthenticated ? (
                 <BrowserRouter>
+                  <AddMemberModalProvider>
                   <RepresentativesSearchProvider>
                   <PendingMemberChangesProvider>
                   <Routes>
@@ -98,6 +100,7 @@ const App = () => {
                   </Routes>
                   </PendingMemberChangesProvider>
                   </RepresentativesSearchProvider>
+                  </AddMemberModalProvider>
                 </BrowserRouter>
               ) : (
                 <SignIn onSignIn={handleSignIn} />

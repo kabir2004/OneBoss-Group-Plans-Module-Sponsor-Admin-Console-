@@ -14,8 +14,6 @@ interface RolePermissionsContextType {
   canConfigure: boolean;
   /** Administrator: false. Administrator Assistant + Super Admin: true (approve changes). */
   canApproveChanges: boolean;
-  /** All roles can view members and edit tombstone info. */
-  canEditTombstone: boolean;
   /** Only Super Admin can manage admins (e.g. edit Super Admin/Admin roles). */
   canManageAdmins: boolean;
   /** Super Admin has full control. */
@@ -38,7 +36,6 @@ export function RolePermissionsProvider({ children }: { children: ReactNode }) {
   const canViewUsersAccess = true;
   const canConfigure = isSuperAdmin || isAdminAssistant;
   const canApproveChanges = isSuperAdmin || isAdminAssistant;
-  const canEditTombstone = true;
   const canManageAdmins = isSuperAdmin;
 
   const value: RolePermissionsContextType = {
@@ -47,7 +44,6 @@ export function RolePermissionsProvider({ children }: { children: ReactNode }) {
     canViewUsersAccess,
     canConfigure,
     canApproveChanges,
-    canEditTombstone,
     canManageAdmins,
     isSuperAdmin,
     isAdmin,

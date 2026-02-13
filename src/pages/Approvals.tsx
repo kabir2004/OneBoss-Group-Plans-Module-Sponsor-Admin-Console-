@@ -1,143 +1,128 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { useRolePermissions } from "@/context/RolePermissionsContext";
-import { Card, CardContent } from "@/components/ui/card";
+import { usePendingMemberChanges } from "@/context/PendingMemberChangesContext";
+import { useRepresentativesSearch } from "@/context/RepresentativesSearchContext";
+import type { PendingChange, ProposedMemberEdits } from "@/context/PendingMemberChangesContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  FileText,
-  Clock,
-  FileSignature,
   CheckCircle2,
-  Search,
-  Plus,
-  Eye,
+  Clock,
   X,
-  Calendar,
+  Eye,
   User,
+  FileEdit,
+  ArrowRight,
+  Users,
+  AlertCircle,
+  ExternalLink,
 } from "lucide-react";
+import { CLIENTS } from "@/pages/Clients";
+import { getRepresentativeDetails } from "@/data/representativeDetails";
+import type { RepDetails } from "@/data/representativeDetails";
 
-type ApprovalStatus =
-  | "pending"
-  | "signed"
-  | "approved"
-  | "pending_signature"
-  | "rejected"
-  | "expired"
-  | "under_review";
+/** Human-readable label for submitter role. */
+function getSubmitterLabel(role: PendingChange["submittedByRole"]): string {
+  switch (role) {
+    case "admin":
+      return "Administrator";
+    case "admin-assistant":
+      return "Administrator Assistant";
+    case "super-admin":
+      return "Super Administrator";
+    default:
+      return "Unknown";
+  }
+}
 
-type ApprovalType = "approval" | "esignature";
+/** Build diff rows (label, current, proposed) for display. */
+function buildDiffRows(
+  current: RepDetails,
+  proposed: ProposedMemberEdits
+): { label: string; current: string; proposed: string }[] {
+  const rows: { label: string; current: string; proposed: string }[] = [];
+  const push = (label: string, curr: string | undefined, prop: string | undefined) => {
+    if (prop === undefined) return;
+    rows.push({ label, current: curr ?? "—", proposed: prop ?? "—" });
+  };
+  push("Surname", current.surname, proposed.surname);
+  push("Name", current.name, proposed.name);
+  push("Date of birth", current.dateOfBirth, proposed.dateOfBirth);
+  push("Business Name", current.businessName, proposed.businessName);
+  push("Start Date", current.startDate, proposed.startDate);
+  push("End Date", current.endDate, proposed.endDate);
+  push("Service Level", current.serviceLevel, proposed.serviceLevel);
+  push("Note", current.note, proposed.note);
+  push("Dealer Maximums", current.dealerMaximums, proposed.dealerMaximums);
+  push("Manager Maximums", current.managerMaximums, proposed.managerMaximums);
+  if (proposed.officeContact) {
+    push("Office Phone", current.officeContact.phone, proposed.officeContact.phone);
+    push("Office E-mail", current.officeContact.email, proposed.officeContact.email);
+  }
+  if (proposed.homeContact) {
+    push("Home Phone", current.homeContact.phone, proposed.homeContact.phone);
+    push("Home E-mail", current.homeContact.email, proposed.homeContact.email);
+  }
+  if (proposed.officeAddress) {
+    push("Office Address", current.officeAddress.address, proposed.officeAddress.address);
+    push("Office City", current.officeAddress.city, proposed.officeAddress.city);
+    push("Office Province", current.officeAddress.province, proposed.officeAddress.province);
+    push("Office Postal", current.officeAddress.postal, proposed.officeAddress.postal);
+  }
+  if (proposed.residentialAddress) {
+    push("Residential Address", current.residentialAddress.address, proposed.residentialAddress.address);
+  }
+  return rows.filter((r) => r.current !== r.proposed);
+}
 
-type Approval = {
-  startDate: string;
-  endDate: string;
-  status: ApprovalStatus;
-  type: ApprovalType;
-  clientName: string;
-  clientSurname: string;
-  module: string;
-};
-
-const APPROVALS: Approval[] = [
-  {
-    startDate: "2024-09-01",
-    endDate: "2024-09-15",
-    status: "pending",
-    type: "approval",
-    clientName: "Johnson",
-    clientSurname: "Robert",
-    module: "Account Opening",
-  },
-  {
-    startDate: "2024-09-02",
-    endDate: "2024-09-16",
-    status: "signed",
-    type: "esignature",
-    clientName: "Wilson",
-    clientSurname: "Emma",
-    module: "Investment Agreement",
-  },
-  {
-    startDate: "2024-08-30",
-    endDate: "2024-09-13",
-    status: "approved",
-    type: "approval",
-    clientName: "Smith",
-    clientSurname: "Michael",
-    module: "Fund Transfer",
-  },
-  {
-    startDate: "2024-09-03",
-    endDate: "2024-09-17",
-    status: "pending_signature",
-    type: "esignature",
-    clientName: "Brown",
-    clientSurname: "Sarah",
-    module: "KYC Update",
-  },
-  {
-    startDate: "2024-08-28",
-    endDate: "2024-09-11",
-    status: "rejected",
-    type: "approval",
-    clientName: "Davis",
-    clientSurname: "James",
-    module: "Withdrawal Request",
-  },
-  {
-    startDate: "2024-09-04",
-    endDate: "2024-09-18",
-    status: "expired",
-    type: "esignature",
-    clientName: "Miller",
-    clientSurname: "Lisa",
-    module: "Fee Agreement",
-  },
-  {
-    startDate: "2024-09-05",
-    endDate: "2024-09-19",
-    status: "under_review",
-    type: "approval",
-    clientName: "Taylor",
-    clientSurname: "David",
-    module: "Risk Assessment",
-  },
-  {
-    startDate: "2024-09-01",
-    endDate: "2024-09-15",
-    status: "signed",
-    type: "esignature",
-    clientName: "Anderson",
-    clientSurname: "Jennifer",
-    module: "Plan Amendment",
-  },
-];
+function formatSubmittedAt(iso: string | undefined): string {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return iso;
+  }
+}
 
 const Approvals = () => {
   const navigate = useNavigate();
-  const { canApproveChanges } = useRolePermissions();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All Status");
-  const [typeFilter, setTypeFilter] = useState("All Types");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const { canApproveChanges, isAdmin, isSuperAdmin } = useRolePermissions();
+  const {
+    pendingByRep,
+    approvePending,
+    rejectPending,
+    getEffectiveDetails,
+  } = usePendingMemberChanges();
+  const { setSelectedRepresentativeId } = useRepresentativesSearch();
+
+  const [detailRepId, setDetailRepId] = useState<string | null>(null);
+  const [rejectRepId, setRejectRepId] = useState<string | null>(null);
+  const [rejectComment, setRejectComment] = useState("");
 
   useEffect(() => {
     if (!canApproveChanges) navigate("/", { replace: true });
@@ -145,337 +130,354 @@ const Approvals = () => {
 
   if (!canApproveChanges) return null;
 
-  const totalItems = APPROVALS.length;
-  const pendingApprovals = APPROVALS.filter(
-    (a) => a.status === "pending" && a.type === "approval"
-  ).length;
-  const pendingSignatures = APPROVALS.filter(
-    (a) => a.status === "pending_signature" && a.type === "esignature"
-  ).length;
-  const completedItems = APPROVALS.filter(
-    (a) => a.status === "approved" || a.status === "signed"
-  ).length;
+  // Build list of pending changes with rep name and diff summary.
+  const pendingList = useMemo(() => {
+    return Object.entries(pendingByRep).map(([repId, pending]) => {
+      const client = CLIENTS.find((c) => c.id === repId);
+      const repName = client?.name ?? `Representative ${repId}`;
+      const base = client ? getRepresentativeDetails(repId, client) : null;
+      const current = base ? getEffectiveDetails(base) : ({} as RepDetails);
+      const diffRows = buildDiffRows(current, pending.proposed);
+      const canApproveThis =
+        isSuperAdmin || (isAdmin && pending.submittedByRole === "admin-assistant");
+      return {
+        repId,
+        repName,
+        client,
+        pending,
+        diffRows,
+        canApproveThis,
+      };
+    });
+  }, [pendingByRep, getEffectiveDetails, isAdmin, isSuperAdmin]);
 
-  const filteredApprovals = APPROVALS.filter((approval) => {
-    const matchesSearch =
-      approval.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      approval.clientSurname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      approval.module.toLowerCase().includes(searchTerm.toLowerCase());
+  // Sort by submittedAt descending (newest first).
+  const sortedPendingList = useMemo(() => {
+    return [...pendingList].sort((a, b) => {
+      const ta = a.pending.submittedAt ?? "";
+      const tb = b.pending.submittedAt ?? "";
+      return tb.localeCompare(ta);
+    });
+  }, [pendingList]);
 
-    const matchesStatus =
-      statusFilter === "All Status" ||
-      statusFilter.toLowerCase().replace(" ", "_") === approval.status;
-
-    const matchesType =
-      typeFilter === "All Types" ||
-      typeFilter.toLowerCase() === approval.type;
-
-    const matchesStartDate = !startDate || approval.startDate >= startDate;
-    const matchesEndDate = !endDate || approval.endDate <= endDate;
-
-    return matchesSearch && matchesStatus && matchesType && matchesStartDate && matchesEndDate;
-  });
-
-  const getStatusBadge = (status: ApprovalStatus) => {
-    const statusConfig = {
-      pending: {
-        className: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100",
-        icon: Clock,
-        label: "pending",
-      },
-      signed: {
-        className: "bg-green-100 text-green-800 hover:bg-green-100",
-        icon: CheckCircle2,
-        label: "signed",
-      },
-      approved: {
-        className: "bg-green-100 text-green-800 hover:bg-green-100",
-        icon: CheckCircle2,
-        label: "approved",
-      },
-      pending_signature: {
-        className: "bg-orange-100 text-orange-800 hover:bg-orange-100",
-        icon: FileSignature,
-        label: "pending_signature",
-      },
-      rejected: {
-        className: "bg-red-100 text-red-800 hover:bg-red-100",
-        icon: X,
-        label: "rejected",
-      },
-      expired: {
-        className: "bg-gray-100 text-gray-800 hover:bg-gray-100",
-        icon: X,
-        label: "expired",
-      },
-      under_review: {
-        className: "bg-blue-100 text-blue-800 hover:bg-blue-100",
-        icon: Clock,
-        label: "under_review",
-      },
-    };
-
-    const config = statusConfig[status];
-    const Icon = config.icon;
-
-    return (
-      <Badge className={`${config.className} font-normal px-2 py-0.5 text-xs flex items-center gap-1`}>
-        <Icon className="h-3 w-3" />
-        {config.label}
-      </Badge>
-    );
+  const handleApprove = (repId: string) => {
+    approvePending(repId);
+    setDetailRepId(null);
   };
 
-  const getTypeBadge = (type: ApprovalType) => {
-    if (type === "approval") {
-      return (
-        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 font-normal px-2 py-0.5 text-xs flex items-center gap-1">
-          <CheckCircle2 className="h-3 w-3" />
-          approval
-        </Badge>
-      );
-    } else {
-      return (
-        <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 font-normal px-2 py-0.5 text-xs flex items-center gap-1">
-          <FileSignature className="h-3 w-3" />
-          esignature
-        </Badge>
-      );
-    }
+  const handleRejectOpen = (repId: string) => {
+    setRejectRepId(repId);
+    setRejectComment("");
   };
 
-  const getActionButtons = (approval: Approval) => {
-    const needsAction = approval.status === "pending" || approval.status === "pending_signature" || approval.status === "under_review";
-    
-    return (
-      <div className="flex items-center gap-2">
-        {needsAction && (
-          <>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-              <CheckCircle2 className="h-3 w-3 text-green-600" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-              <X className="h-3 w-3 text-red-600" />
-            </Button>
-          </>
-        )}
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-          <Eye className="h-3 w-3 text-blue-600" />
-        </Button>
-      </div>
-    );
+  const handleRejectConfirm = () => {
+    if (!rejectRepId || !rejectComment.trim()) return;
+    rejectPending(rejectRepId, rejectComment.trim());
+    setRejectRepId(null);
+    setRejectComment("");
+    setDetailRepId(null);
   };
+
+  const openInUsersAccess = (repId: string) => {
+    setSelectedRepresentativeId(repId);
+    navigate("/users-access");
+  };
+
+  const detailItem = detailRepId ? pendingList.find((p) => p.repId === detailRepId) : null;
 
   return (
-    <PageLayout title="">
+    <PageLayout title="Changes pending approval">
       <div className="space-y-6">
+        {/* Intro */}
+        <p className="text-sm text-gray-600">
+          Review member profile changes submitted by Administrators or Administrator Assistants.
+          Approve to apply changes; reject to send back (submitter can edit and resubmit).
+        </p>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-4 gap-4">
-          {/* Total Items Card */}
-          <Card className="border border-gray-200 shadow-sm bg-gray-50">
+        {/* Summary cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card className="border border-gray-200 shadow-sm bg-white">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-gray-200 rounded-lg">
-                  <FileText className="h-5 w-5 text-gray-600" />
+                <div className="p-2 bg-amber-100 rounded-lg">
+                  <Clock className="h-5 w-5 text-amber-600" />
                 </div>
-                <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-1">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">{totalItems}</p>
-                  <p className="text-xs text-gray-600 mt-1">Items</p>
+                <div>
+                  <p className="text-xs text-gray-600">Pending review</p>
+                  <p className="text-2xl font-bold text-gray-900">{pendingList.length}</p>
+                  <p className="text-xs text-gray-500">member change(s)</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-
-          {/* Pending Approvals Card */}
-          <Card className="border border-gray-200 shadow-sm bg-gray-50">
+          <Card className="border border-gray-200 shadow-sm bg-white">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Clock className="h-5 w-5 text-yellow-600" />
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Users className="h-5 w-5 text-blue-600" />
                 </div>
-                <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-1">Pending</p>
-                  <p className="text-2xl font-bold text-gray-900">{pendingApprovals}</p>
-                  <p className="text-xs text-gray-600 mt-1">Approvals</p>
+                <div>
+                  <p className="text-xs text-gray-600">Representatives</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {new Set(pendingList.map((p) => p.repId)).size}
+                  </p>
+                  <p className="text-xs text-gray-500">with pending changes</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-
-          {/* Pending Signatures Card */}
-          <Card className="border border-gray-200 shadow-sm bg-gray-50">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <FileSignature className="h-5 w-5 text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-1">Signatures</p>
-                  <p className="text-2xl font-bold text-gray-900">{pendingSignatures}</p>
-                  <p className="text-xs text-gray-600 mt-1">Pending</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Completed Items Card */}
-          <Card className="border border-gray-200 shadow-sm bg-gray-50">
+          <Card className="border border-gray-200 shadow-sm bg-white">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 rounded-lg">
                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                 </div>
-                <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-1">Completed</p>
-                  <p className="text-2xl font-bold text-gray-900">{completedItems}</p>
-                  <p className="text-xs text-gray-600 mt-1">Items</p>
+                <div>
+                  <p className="text-xs text-gray-600">Your action</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {isSuperAdmin ? "Can approve all" : isAdmin ? "Admin Assistant submissions" : "—"}
+                  </p>
+                  <p className="text-xs text-gray-500">based on your role</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Approval & eSignature Overview Section */}
+        {/* Pending by representative */}
         <Card className="border border-gray-200 shadow-sm">
-          <CardContent className="p-6">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <h2 className="text-xl font-bold text-gray-900">
-                  Approval & eSignature Overview
-                </h2>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileEdit className="h-5 w-5 text-gray-600" />
+              Member changes by representative
+            </CardTitle>
+            <p className="text-sm text-gray-500 font-normal">
+              Each card is one representative (client) with changes waiting for approval. Open details to see full before/after and Approve or Reject.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {sortedPendingList.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50/50 py-12 text-center">
+                <CheckCircle2 className="h-10 w-10 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm font-medium text-gray-600">No pending changes</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  When an Administrator or Administrator Assistant submits member profile edits, they will appear here for approval.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => navigate("/users-access")}
+                >
+                  Go to Users & Access
+                </Button>
               </div>
-              <Button className="bg-green-600 hover:bg-green-700 text-white">
-                <Plus className="h-4 w-4 mr-2" />
-                New Request
-              </Button>
-            </div>
-
-            {/* Search and Filter Bar */}
-            <div className="flex items-center gap-4 mb-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search approvals..."
-                  className="pl-10 bg-gray-50 border-gray-200 rounded-lg"
-                />
+            ) : (
+              <div className="space-y-4">
+                {sortedPendingList.map((item) => (
+                  <Card
+                    key={item.repId}
+                    className="border border-gray-200 bg-white overflow-hidden"
+                  >
+                    <CardContent className="p-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <User className="h-4 w-4 text-gray-500 shrink-0" />
+                            <span className="font-semibold text-gray-900">{item.repName}</span>
+                            <Badge variant="secondary" className="text-xs font-normal">
+                              {getSubmitterLabel(item.pending.submittedByRole)} submitted
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Submitted {formatSubmittedAt(item.pending.submittedAt)}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {item.diffRows.slice(0, 6).map((r, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-xs text-gray-700"
+                              >
+                                {r.label}
+                              </span>
+                            ))}
+                            {item.diffRows.length > 6 && (
+                              <span className="text-xs text-gray-500">
+                                +{item.diffRows.length - 6} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDetailRepId(item.repId)}
+                            className="gap-1.5"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View details
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openInUsersAccess(item.repId)}
+                            className="gap-1.5 text-gray-600"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Open in Users & Access
+                          </Button>
+                          {!item.canApproveThis && (
+                            <span className="text-xs text-gray-500 italic">Awaiting approval</span>
+                          )}
+                          {item.canApproveThis && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 gap-1.5"
+                                onClick={() => handleApprove(item.repId)}
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Approve
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 border-red-200 hover:bg-red-50 gap-1.5"
+                                onClick={() => handleRejectOpen(item.repId)}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px] h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All Status">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="signed">Signed</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="pending_signature">Pending Signature</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                  <SelectItem value="expired">Expired</SelectItem>
-                  <SelectItem value="under_review">Under Review</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[140px] h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All Types">All Types</SelectItem>
-                  <SelectItem value="approval">Approval</SelectItem>
-                  <SelectItem value="esignature">eSignature</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  placeholder="yyyy-mm-dd"
-                  className="pl-10 w-[150px] bg-gray-50 border-gray-200 rounded-lg"
-                />
-              </div>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  placeholder="yyyy-mm-dd"
-                  className="pl-10 w-[150px] bg-gray-50 border-gray-200 rounded-lg"
-                />
-              </div>
-            </div>
-
-            {/* Section Search Info */}
-            <div className="mb-4 p-2 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
-              <div className="h-4 w-4 bg-green-600 rounded-full flex items-center justify-center">
-                <div className="h-1.5 w-1.5 bg-white rounded-full"></div>
-              </div>
-              <p className="text-xs text-gray-700">
-                Section Search: Filter approvals and eSignatures by status, type, or date range.
-              </p>
-            </div>
-
-            {/* Table */}
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50">
-                    <TableHead className="text-xs font-semibold text-gray-700">
-                      START DATE
-                    </TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-700">
-                      END DATE
-                    </TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-700">STATUS</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-700">TYPE</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-700">
-                      CLIENT NAME
-                    </TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-700">
-                      CLIENT SURNAME
-                    </TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-700">MODULE</TableHead>
-                    <TableHead className="text-xs font-semibold text-gray-700">ACTIONS</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredApprovals.map((approval, index) => (
-                    <TableRow
-                      key={`${approval.startDate}-${approval.clientName}`}
-                      className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                    >
-                      <TableCell className="text-xs text-gray-900">
-                        {approval.startDate}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-900">{approval.endDate}</TableCell>
-                      <TableCell>{getStatusBadge(approval.status)}</TableCell>
-                      <TableCell>{getTypeBadge(approval.type)}</TableCell>
-                      <TableCell className="text-xs text-gray-900">
-                        {approval.clientName}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-900">
-                        {approval.clientSurname}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-900">{approval.module}</TableCell>
-                      <TableCell>{getActionButtons(approval)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Detail sheet: full diff and actions */}
+      <Sheet open={!!detailRepId} onOpenChange={(open) => !open && setDetailRepId(null)}>
+        <SheetContent className="w-full sm:max-w-lg flex flex-col">
+          <SheetHeader>
+            <SheetTitle>
+              {detailItem ? detailItem.repName : "Pending change"}
+            </SheetTitle>
+            <SheetDescription>
+              {detailItem && (
+                <>
+                  Submitted by {getSubmitterLabel(detailItem.pending.submittedByRole)} on{" "}
+                  {formatSubmittedAt(detailItem.pending.submittedAt)}. Review the changes below and approve or reject.
+                </>
+              )}
+            </SheetDescription>
+          </SheetHeader>
+          {detailItem && (
+            <ScrollArea className="flex-1 -mx-6 px-6">
+              <div className="space-y-3 pb-6">
+                <p className="text-sm font-medium text-gray-700">Changes (current → proposed)</p>
+                <div className="rounded-lg border border-gray-200 bg-gray-50/50 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 border-b border-gray-200">
+                        <th className="text-left py-2 px-3 font-medium text-gray-700">Field</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-700">Current</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-700">Proposed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailItem.diffRows.map((r, i) => (
+                        <tr key={i} className="border-b border-gray-100 last:border-0">
+                          <td className="py-2 px-3 text-gray-600 font-medium">{r.label}</td>
+                          <td className="py-2 px-3">
+                            <span className="text-red-600 line-through">{r.current || "—"}</span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="text-green-700 font-medium">{r.proposed || "—"}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </ScrollArea>
+          )}
+          {detailItem && (
+            <SheetFooter className="border-t pt-4 flex flex-wrap gap-2 sm:gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => openInUsersAccess(detailItem.repId)}
+                className="gap-1.5 text-gray-600 mr-auto"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Open in Users & Access
+              </Button>
+              <Button variant="outline" onClick={() => setDetailRepId(null)}>
+                Close
+              </Button>
+              <Button
+                variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => handleRejectOpen(detailItem.repId)}
+              >
+                Reject
+              </Button>
+              {detailItem.canApproveThis && (
+                <Button
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={() => handleApprove(detailItem.repId)}
+                >
+                  Approve
+                </Button>
+              )}
+            </SheetFooter>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Reject comment dialog */}
+      <Dialog open={!!rejectRepId} onOpenChange={(open) => !open && setRejectRepId(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Reject change
+            </DialogTitle>
+            <DialogDescription>
+              Add a reason for rejection. The person who submitted the change will see this and can edit and resubmit.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="Reason for rejection (required)"
+            value={rejectComment}
+            onChange={(e) => setRejectComment(e.target.value)}
+            rows={4}
+            className="resize-none"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectRepId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRejectConfirm}
+              disabled={!rejectComment.trim()}
+            >
+              Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageLayout>
   );
 };
 
 export default Approvals;
-

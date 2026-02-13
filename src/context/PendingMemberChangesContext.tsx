@@ -37,6 +37,8 @@ export type PendingChange = {
   proposed: ProposedMemberEdits;
   /** Who submitted; determines who can approve (admin-assistant → admin/super-admin; admin → super-admin only). */
   submittedByRole?: SubmitterRole;
+  /** When the change was submitted (ISO string). */
+  submittedAt?: string;
   rejectedComment?: string;
 };
 
@@ -85,7 +87,12 @@ export function PendingMemberChangesProvider({ children }: { children: ReactNode
   const submitPending = useCallback((repId: string, proposed: ProposedMemberEdits, submittedByRole?: SubmitterRole) => {
     setPendingByRep((prev) => ({
       ...prev,
-      [repId]: { status: 'submitted', proposed, submittedByRole },
+      [repId]: {
+        status: 'submitted',
+        proposed,
+        submittedByRole,
+        submittedAt: new Date().toISOString(),
+      },
     }));
   }, []);
 

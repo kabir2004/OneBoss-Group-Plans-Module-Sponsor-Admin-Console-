@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { useRolePermissions } from '@/context/RolePermissionsContext';
@@ -271,48 +271,79 @@ const UsersAccess = () => {
   };
 
   function DiffView({ current, proposed }: { current: RepDetails; proposed: ProposedMemberEdits }) {
-    const rows: { label: string; current: string; proposed: string }[] = [];
-    const push = (label: string, curr: string | undefined, prop: string | undefined) => {
+    const allRows: { label: string; current: string; proposed: string; group: string }[] = [];
+    const push = (group: string, label: string, curr: string | undefined, prop: string | undefined) => {
       if (prop === undefined) return;
-      rows.push({ label, current: curr ?? '—', proposed: prop ?? '—' });
+      allRows.push({ label, current: curr ?? '—', proposed: prop ?? '—', group });
     };
-    push('Surname', current.surname, proposed.surname);
-    push('Name', current.name, proposed.name);
-    push('Date of birth', current.dateOfBirth, proposed.dateOfBirth);
-    push('Business Name', current.businessName, proposed.businessName);
-    push('Start Date', current.startDate, proposed.startDate);
-    push('End Date', current.endDate, proposed.endDate);
-    push('Service Level', current.serviceLevel, proposed.serviceLevel);
-    push('Note', current.note, proposed.note);
-    push('Dealer Maximums', current.dealerMaximums, proposed.dealerMaximums);
-    push('Manager Maximums', current.managerMaximums, proposed.managerMaximums);
+    push('Personal', 'Surname', current.surname, proposed.surname);
+    push('Personal', 'Name', current.name, proposed.name);
+    push('Personal', 'Date of birth', current.dateOfBirth, proposed.dateOfBirth);
+    push('Personal', 'Business Name', current.businessName, proposed.businessName);
+    push('Dates', 'Start Date', current.startDate, proposed.startDate);
+    push('Dates', 'End Date', current.endDate, proposed.endDate);
+    push('Service', 'Service Level', current.serviceLevel, proposed.serviceLevel);
+    push('Service', 'Note', current.note, proposed.note);
+    push('Maximums', 'Dealer Maximums', current.dealerMaximums, proposed.dealerMaximums);
+    push('Maximums', 'Manager Maximums', current.managerMaximums, proposed.managerMaximums);
     if (proposed.officeContact) {
-      push('Office Phone', current.officeContact.phone, proposed.officeContact.phone);
-      push('Office E-mail', current.officeContact.email, proposed.officeContact.email);
+      push('Office contact', 'Phone', current.officeContact.phone, proposed.officeContact.phone);
+      push('Office contact', 'E-mail', current.officeContact.email, proposed.officeContact.email);
     }
     if (proposed.homeContact) {
-      push('Home Phone', current.homeContact.phone, proposed.homeContact.phone);
-      push('Home E-mail', current.homeContact.email, proposed.homeContact.email);
+      push('Home contact', 'Phone', current.homeContact.phone, proposed.homeContact.phone);
+      push('Home contact', 'E-mail', current.homeContact.email, proposed.homeContact.email);
     }
+    // Only show fields that actually changed
+    const changedRows = allRows.filter((r) => r.current !== r.proposed);
+    const byGroup = changedRows.reduce<Record<string, typeof changedRows>>((acc, r) => {
+      if (!acc[r.group]) acc[r.group] = [];
+      acc[r.group].push(r);
+      return acc;
+    }, {});
+    const groupOrder = ['Personal', 'Dates', 'Service', 'Maximums', 'Office contact', 'Home contact'];
+    const groupLabels: Record<string, string> = {
+      Personal: 'Personal details',
+      Dates: 'Dates',
+      Service: 'Service',
+      Maximums: 'Maximums',
+      'Office contact': 'Office contact',
+      'Home contact': 'Home contact',
+    };
+
     return (
       <Card className="border border-gray-200 mb-2">
         <CardHeader className="py-2 px-3">
           <CardTitle className="text-sm font-semibold">Proposed changes</CardTitle>
+          <p className="text-xs text-gray-500 font-normal mt-0.5">Only fields with changes are listed.</p>
         </CardHeader>
-        <CardContent className="px-3 pb-3 space-y-1.5 text-sm">
-          {rows.map((r, i) => (
-            <div key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="text-gray-600 shrink-0">{r.label}:</span>
-              {r.current !== r.proposed ? (
-                <>
-                  <span className="text-red-600 line-through">{r.current || '—'}</span>
-                  <span className="text-green-700 font-medium">{r.proposed || '—'}</span>
-                </>
-              ) : (
-                <span className="text-gray-900">{r.current || '—'}</span>
-              )}
+        <CardContent className="px-3 pb-3 pt-0">
+          {changedRows.length === 0 ? (
+            <p className="text-xs text-gray-500 py-2">No field changes in this submission.</p>
+          ) : (
+            <div className="space-y-3">
+              {groupOrder.map((group) => {
+                const rows = byGroup[group];
+                if (!rows?.length) return null;
+                return (
+                  <div key={group} className="rounded border border-gray-100 bg-gray-50/50 overflow-hidden">
+                    <div className="px-2.5 py-1 bg-gray-100/80 border-b border-gray-100 text-xs font-medium text-gray-700">
+                      {groupLabels[group]}
+                    </div>
+                    <dl className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-3 gap-y-0.5 text-sm px-2.5 py-1.5">
+                      {rows.map((r, i) => (
+                        <Fragment key={i}>
+                          <dt className="text-gray-600 truncate">{r.label}</dt>
+                          <dd className="text-red-600 line-through text-right whitespace-nowrap">{r.current || '—'}</dd>
+                          <dd className="text-green-700 font-medium text-right whitespace-nowrap min-w-[6rem]">{r.proposed || '—'}</dd>
+                        </Fragment>
+                      ))}
+                    </dl>
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          )}
         </CardContent>
       </Card>
     );

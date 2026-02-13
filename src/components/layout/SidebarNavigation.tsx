@@ -16,10 +16,6 @@ import {
   LayoutDashboard,
   Users,
   UserCog,
-  FileText,
-  BriefcaseBusiness,
-  ShieldCheck,
-  History,
   Settings,
   Plus,
   Search,
@@ -39,7 +35,6 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  FileEdit,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -67,16 +62,6 @@ const oneBossMenuItems = [
     title: 'Users & Access',
     icon: UserCog,
     path: '/users-access',
-  },
-  {
-    title: 'Tombstone',
-    icon: FileEdit,
-    path: '/tombstone',
-  },
-  {
-    title: 'Plans',
-    icon: FileText,
-    path: '/plans',
   },
   {
     title: 'Trades',
@@ -141,31 +126,6 @@ const legacyMenuItems = [
     title: 'Users & Access',
     icon: UserCog,
     path: '/users-access',
-  },
-  {
-    title: 'Tombstone',
-    icon: FileEdit,
-    path: '/tombstone',
-  },
-  {
-    title: 'Plans',
-    icon: FileText,
-    path: '/plans',
-  },
-  {
-    title: 'Accounts & Trades',
-    icon: BriefcaseBusiness,
-    path: '/accounts-trades',
-  },
-  {
-    title: 'Compliance',
-    icon: ShieldCheck,
-    path: '/compliance',
-  },
-  {
-    title: 'Audit Log',
-    icon: History,
-    path: '/audit-log',
   },
   {
     title: 'Settings',

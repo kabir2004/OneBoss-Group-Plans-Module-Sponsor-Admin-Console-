@@ -11,10 +11,6 @@ import NotFound from "./pages/NotFound";
 import Clients from "./pages/Clients";
 import ClientDetails from "./pages/ClientDetails";
 import UsersAccess from "./pages/UsersAccess";
-import Plans from "./pages/Plans";
-import AccountsTrades from "./pages/AccountsTrades";
-import Compliance from "./pages/Compliance";
-import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
 import TrustDeposits from "./pages/TrustDeposits";
 import Households from "./pages/Households";
@@ -22,10 +18,7 @@ import IncomePlans from "./pages/IncomePlans";
 import Approvals from "./pages/Approvals";
 import Reports from "./pages/Reports";
 import AdvancedSearch from "./pages/AdvancedSearch";
-import TombstoneWorkflow from "./pages/TombstoneWorkflow";
 import { AuthProvider } from "./context/AuthContext";
-import { AuditLogProvider } from "./context/AuditLogContext";
-import { TombstoneProvider } from "./context/TombstoneContext";
 import { RepresentativesSearchProvider } from "./context/RepresentativesSearchContext";
 import { PendingMemberChangesProvider } from "./context/PendingMemberChangesContext";
 import { InterfaceProvider } from "./context/InterfaceContext";
@@ -79,8 +72,6 @@ const App = () => {
         <AuthProvider value={{ signOut: handleSignOut }}>
           <InterfaceProvider>
             <RolePermissionsProvider>
-            <AuditLogProvider>
-            <TombstoneProvider>
             <SponsorProvider>
             <MenuVisibilityProvider>
               <TooltipProvider>
@@ -95,10 +86,6 @@ const App = () => {
                   <Route path="/clients" element={<Clients />} />
                   <Route path="/clients/:id" element={<ClientDetails />} />
                   <Route path="/users-access" element={<UsersAccess />} />
-                  <Route path="/plans" element={<Plans />} />
-                  <Route path="/accounts-trades" element={<AccountsTrades />} />
-                  <Route path="/compliance" element={<Compliance />} />
-                  <Route path="/audit-log" element={<AuditLog />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/trust-deposits" element={<TrustDeposits />} />
                   <Route path="/households" element={<Households />} />
@@ -106,7 +93,6 @@ const App = () => {
                   <Route path="/approvals" element={<Approvals />} />
                   <Route path="/reports" element={<Reports />} />
                   <Route path="/advanced-search" element={<AdvancedSearch />} />
-                  <Route path="/tombstone" element={<TombstoneWorkflow />} />
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
@@ -119,8 +105,6 @@ const App = () => {
               </TooltipProvider>
             </MenuVisibilityProvider>
             </SponsorProvider>
-            </TombstoneProvider>
-            </AuditLogProvider>
             </RolePermissionsProvider>
           </InterfaceProvider>
         </AuthProvider>

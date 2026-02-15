@@ -42,21 +42,33 @@ export type PendingChange = {
   rejectedComment?: string;
 };
 
+/** Outcome of a review shown to the submitter: which fields were accepted vs rejected (with reasons). */
+export type ReviewOutcome = {
+  submittedAt?: string;
+  /** Role that submitted the change; widget is only shown to the user with this role. */
+  submittedByRole?: SubmitterRole;
+  accepted: { fieldKey: string; label: string }[];
+  rejected: { fieldKey: string; label: string; reason: string }[];
+};
+
 type ContextType = {
   /** Representative ID -> pending change (submitted for review). */
   pendingByRep: Record<string, PendingChange>;
   /** Representative ID -> applied edits (approved or Super Admin direct). Merged on top of base details. */
   appliedEditsByRep: Record<string, ProposedMemberEdits>;
+  /** Representative ID -> last review outcome (for submitter to see what was accepted/rejected). */
+  lastReviewOutcomeByRep: Record<string, ReviewOutcome>;
   /** IDs of representatives that have submitted pending changes (for badge). */
   repIdsWithPendingChanges: string[];
   submitPending: (repId: string, proposed: ProposedMemberEdits, submittedByRole?: SubmitterRole) => void;
-  approvePending: (repId: string) => void;
+  approvePending: (repId: string, outcome?: ReviewOutcome) => void;
   /** Apply only a subset of the pending proposed edits (e.g. only approved fields), then clear pending. */
-  approvePendingPartial: (repId: string, partialProposed: ProposedMemberEdits) => void;
+  approvePendingPartial: (repId: string, partialProposed: ProposedMemberEdits, outcome: ReviewOutcome) => void;
   rejectPending: (repId: string, comment: string) => void;
   applyDirectEdits: (repId: string, proposed: ProposedMemberEdits) => void;
   getEffectiveDetails: (base: RepDetails) => RepDetails;
   getPendingForRep: (repId: string) => PendingChange | null;
+  getReviewOutcomeForRep: (repId: string) => ReviewOutcome | null;
 };
 
 function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T> | undefined): T {
@@ -83,10 +95,16 @@ const PendingMemberChangesContext = createContext<ContextType | undefined>(undef
 export function PendingMemberChangesProvider({ children }: { children: ReactNode }) {
   const [pendingByRep, setPendingByRep] = useState<Record<string, PendingChange>>({});
   const [appliedEditsByRep, setAppliedEditsByRep] = useState<Record<string, ProposedMemberEdits>>({});
+  const [lastReviewOutcomeByRep, setLastReviewOutcomeByRep] = useState<Record<string, ReviewOutcome>>({});
 
   const repIdsWithPendingChanges = Object.keys(pendingByRep);
 
   const submitPending = useCallback((repId: string, proposed: ProposedMemberEdits, submittedByRole?: SubmitterRole) => {
+    setLastReviewOutcomeByRep((prev) => {
+      const next = { ...prev };
+      delete next[repId];
+      return next;
+    });
     setPendingByRep((prev) => ({
       ...prev,
       [repId]: {
@@ -98,10 +116,13 @@ export function PendingMemberChangesProvider({ children }: { children: ReactNode
     }));
   }, []);
 
-  const approvePending = useCallback((repId: string) => {
+  const approvePending = useCallback((repId: string, outcome?: ReviewOutcome) => {
     setPendingByRep((prev) => {
       const pending = prev[repId];
       if (!pending) return prev;
+      if (outcome) {
+        setLastReviewOutcomeByRep((o) => ({ ...o, [repId]: outcome }));
+      }
       setAppliedEditsByRep((a) => ({
         ...a,
         [repId]: deepMerge(a[repId] ?? {}, pending.proposed) as ProposedMemberEdits,
@@ -112,9 +133,10 @@ export function PendingMemberChangesProvider({ children }: { children: ReactNode
     });
   }, []);
 
-  const approvePendingPartial = useCallback((repId: string, partialProposed: ProposedMemberEdits) => {
+  const approvePendingPartial = useCallback((repId: string, partialProposed: ProposedMemberEdits, outcome: ReviewOutcome) => {
     setPendingByRep((prev) => {
       if (!prev[repId]) return prev;
+      setLastReviewOutcomeByRep((o) => ({ ...o, [repId]: outcome }));
       setAppliedEditsByRep((a) => ({
         ...a,
         [repId]: deepMerge(a[repId] ?? {}, partialProposed) as ProposedMemberEdits,
@@ -157,9 +179,15 @@ export function PendingMemberChangesProvider({ children }: { children: ReactNode
     [pendingByRep]
   );
 
+  const getReviewOutcomeForRep = useCallback(
+    (repId: string): ReviewOutcome | null => lastReviewOutcomeByRep[repId] ?? null,
+    [lastReviewOutcomeByRep]
+  );
+
   const value: ContextType = {
     pendingByRep,
     appliedEditsByRep,
+    lastReviewOutcomeByRep,
     repIdsWithPendingChanges,
     submitPending,
     approvePending,
@@ -168,6 +196,7 @@ export function PendingMemberChangesProvider({ children }: { children: ReactNode
     applyDirectEdits,
     getEffectiveDetails,
     getPendingForRep,
+    getReviewOutcomeForRep,
   };
 
   return (

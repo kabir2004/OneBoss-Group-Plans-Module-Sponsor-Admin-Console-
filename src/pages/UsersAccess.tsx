@@ -33,7 +33,7 @@ import {
 import { UserPlus, Pencil, UserX, Save, X, Check, XCircle } from 'lucide-react';
 import { useRepresentativesSearch } from '@/context/RepresentativesSearchContext';
 import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
-import type { ProposedMemberEdits, PendingChange, SubmitterRole } from '@/context/PendingMemberChangesContext';
+import type { ProposedMemberEdits, PendingChange, SubmitterRole, ReviewOutcome } from '@/context/PendingMemberChangesContext';
 import { CLIENTS } from '@/pages/Clients';
 import { getRepresentativeDetails } from '@/data/representativeDetails';
 import type { RepDetails } from '@/data/representativeDetails';
@@ -97,6 +97,7 @@ const UsersAccess = () => {
   const {
     getEffectiveDetails,
     getPendingForRep,
+    getReviewOutcomeForRep,
     submitPending,
     approvePending,
     approvePendingPartial,
@@ -124,10 +125,12 @@ const UsersAccess = () => {
   /** Which field's reject-reason dialog is open. */
   const [rejectFieldDialog, setRejectFieldDialog] = useState<{ fieldKey: string; label: string } | null>(null);
   const [rejectFieldReason, setRejectFieldReason] = useState('');
-  /** List of field keys in the current diff (set by DiffView) so we can build partial approve. */
-  const [fieldKeysInDiff, setFieldKeysInDiff] = useState<string[]>([]);
+  /** Rows in the current diff (fieldKey + label) set by DiffView for partial approve and review outcome. */
+  const [fieldRowsInDiff, setFieldRowsInDiff] = useState<{ fieldKey: string; label: string }[]>([]);
   const [inviteSentOpen, setInviteSentOpen] = useState(false);
   const [inviteSentInfo, setInviteSentInfo] = useState<{ name: string; email: string; role: UserRole } | null>(null);
+  /** Rep IDs for which the user has dismissed the review outcome notice. */
+  const [dismissedReviewOutcomeRepIds, setDismissedReviewOutcomeRepIds] = useState<string[]>([]);
 
   const { setRepresentativesCount, setRepresentativesList, selectedRepresentativeId } = useRepresentativesSearch();
 
@@ -235,7 +238,7 @@ const UsersAccess = () => {
   useEffect(() => {
     setFieldDecisions({});
     setFieldRejectReasons({});
-    setFieldKeysInDiff([]);
+    setFieldRowsInDiff([]);
     setRejectFieldDialog(null);
     setRejectFieldReason('');
   }, [selectedRepresentativeId, pending?.submittedAt]);
@@ -327,17 +330,29 @@ const UsersAccess = () => {
     if (!selectedRepresentativeId) return;
     const pendingData = getPendingForRep(selectedRepresentativeId);
     if (!pendingData) return;
-    const hasPerFieldDecisions = fieldKeysInDiff.some((k) => fieldDecisions[k] !== undefined);
-    if (hasPerFieldDecisions && fieldKeysInDiff.length > 0) {
-      const approvedKeys = fieldKeysInDiff.filter((k) => fieldDecisions[k] === 'approved');
+    const hasPerFieldDecisions = fieldRowsInDiff.some((r) => fieldDecisions[r.fieldKey] !== undefined);
+    if (hasPerFieldDecisions && fieldRowsInDiff.length > 0) {
+      const approvedKeys = fieldRowsInDiff.filter((r) => fieldDecisions[r.fieldKey] === 'approved').map((r) => r.fieldKey);
       const partial = buildPartialFromApproved(pendingData.proposed, approvedKeys);
-      approvePendingPartial(selectedRepresentativeId, partial);
+      const outcome: ReviewOutcome = {
+        submittedAt: pendingData.submittedAt,
+        submittedByRole: pendingData.submittedByRole,
+        accepted: fieldRowsInDiff.filter((r) => fieldDecisions[r.fieldKey] === 'approved').map((r) => ({ fieldKey: r.fieldKey, label: r.label })),
+        rejected: fieldRowsInDiff.filter((r) => fieldDecisions[r.fieldKey] === 'rejected').map((r) => ({ fieldKey: r.fieldKey, label: r.label, reason: fieldRejectReasons[r.fieldKey] ?? '' })),
+      };
+      approvePendingPartial(selectedRepresentativeId, partial, outcome);
     } else {
-      approvePending(selectedRepresentativeId);
+      const outcome: ReviewOutcome = {
+        submittedAt: pendingData.submittedAt,
+        submittedByRole: pendingData.submittedByRole,
+        accepted: fieldRowsInDiff.map((r) => ({ fieldKey: r.fieldKey, label: r.label })),
+        rejected: [],
+      };
+      approvePending(selectedRepresentativeId, outcome);
     }
     setFieldDecisions({});
     setFieldRejectReasons({});
-    setFieldKeysInDiff([]);
+    setFieldRowsInDiff([]);
   };
 
   const handleRejectOpen = () => setRejectOpen(true);
@@ -348,7 +363,7 @@ const UsersAccess = () => {
     setRejectComment('');
     setFieldDecisions({});
     setFieldRejectReasons({});
-    setFieldKeysInDiff([]);
+    setFieldRowsInDiff([]);
   };
 
   const handleRejectFieldConfirm = () => {
@@ -397,7 +412,7 @@ const UsersAccess = () => {
     fieldRejectReasons: Record<string, string>;
     onFieldApprove: (fieldKey: string) => void;
     onFieldReject: (fieldKey: string, label: string) => void;
-    onFieldKeysChange: (keys: string[]) => void;
+    onFieldKeysChange: (rows: { fieldKey: string; label: string }[]) => void;
     onSave: () => void;
   }) {
     const allRows: { label: string; current: string; proposed: string; group: string; fieldKey: string }[] = [];
@@ -453,7 +468,7 @@ const UsersAccess = () => {
     const changedRows = allRows.filter((r) => r.current !== r.proposed);
     const fieldKeysStable = changedRows.map((r) => r.fieldKey).sort().join(',');
     useEffect(() => {
-      onFieldKeysChange(changedRows.map((r) => r.fieldKey));
+      onFieldKeysChange(changedRows.map((r) => ({ fieldKey: r.fieldKey, label: r.label })));
     }, [fieldKeysStable, onFieldKeysChange]);
     const byGroup = changedRows.reduce<Record<string, typeof changedRows>>((acc, r) => {
       if (!acc[r.group]) acc[r.group] = [];
@@ -744,7 +759,7 @@ const UsersAccess = () => {
                 fieldRejectReasons={fieldRejectReasons}
                 onFieldApprove={(fieldKey) => setFieldDecisions((prev) => ({ ...prev, [fieldKey]: 'approved' }))}
                 onFieldReject={(fieldKey, label) => setRejectFieldDialog({ fieldKey, label })}
-                onFieldKeysChange={(keys) => setFieldKeysInDiff((prev) => (prev.length === keys.length && prev.every((k, i) => k === keys[i]) ? prev : keys))}
+                onFieldKeysChange={(rows) => setFieldRowsInDiff((prev) => (prev.length === rows.length && rows.every((r, i) => prev[i]?.fieldKey === r.fieldKey) ? prev : rows))}
                 onSave={handleApprove}
               />
             ) : (
@@ -906,6 +921,89 @@ const UsersAccess = () => {
                 </Card>
               </div>
             </div>
+            {/* Review outcome — only shown to the person who submitted the changes (Admin sees only their own; Admin Assistant only their own) */}
+            {selectedRepresentativeId && (() => {
+              const reviewOutcome = getReviewOutcomeForRep(selectedRepresentativeId);
+              if (!reviewOutcome || (reviewOutcome.accepted.length === 0 && reviewOutcome.rejected.length === 0)) return null;
+              if (reviewOutcome.submittedByRole !== role) return null;
+              if (dismissedReviewOutcomeRepIds.includes(selectedRepresentativeId)) return null;
+              const submittedText = reviewOutcome.submittedAt
+                ? new Date(reviewOutcome.submittedAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) + ' at ' + new Date(reviewOutcome.submittedAt).toLocaleTimeString(undefined, { timeStyle: 'short' })
+                : '';
+              return (
+                <div className="mt-2 w-full">
+                  <Card className="border border-blue-200/80 bg-blue-50/30 w-full relative">
+                    <CardHeader className="py-3 px-4 pr-10 border-b border-blue-200/60">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2 h-7 w-7 text-gray-500 hover:text-gray-700 hover:bg-blue-100/50 rounded-full"
+                        onClick={() => setDismissedReviewOutcomeRepIds((prev) => (prev.includes(selectedRepresentativeId!) ? prev : [...prev, selectedRepresentativeId!]))}
+                        aria-label="Close notice"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                      <CardTitle className="text-sm font-semibold text-gray-900">Review outcome — your submission</CardTitle>
+                      {submittedText && (
+                        <p className="text-xs text-gray-600 font-normal mt-0.5">Submitted {submittedText}</p>
+                      )}
+                      <p className="text-xs text-gray-500 font-normal mt-1">Summary of what was accepted and rejected by the reviewer.</p>
+                    </CardHeader>
+                    <CardContent className="px-4 py-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="rounded-lg border border-green-200 bg-green-50/50 p-3">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-green-800 mb-2 flex items-center gap-1.5">
+                            <Check className="h-3.5 w-3.5" />
+                            Accepted ({reviewOutcome.accepted.length})
+                          </h4>
+                          {reviewOutcome.accepted.length === 0 ? (
+                            <p className="text-xs text-green-700/80">No fields were accepted.</p>
+                          ) : (
+                            <ul className="text-xs text-green-800 space-y-1">
+                              {reviewOutcome.accepted.map((a, i) => (
+                                <li key={i} className="flex items-center gap-1.5">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-green-600 shrink-0" />
+                                  {a.label}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                        <div className="rounded-lg border border-red-200 bg-red-50/50 p-3 flex flex-col">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-red-800 mb-2 flex items-center gap-1.5">
+                            <XCircle className="h-3.5 w-3.5" />
+                            Rejected ({reviewOutcome.rejected.length})
+                          </h4>
+                          {reviewOutcome.rejected.length === 0 ? (
+                            <p className="text-xs text-red-700/80">No fields were rejected.</p>
+                          ) : (
+                            <ul className="text-xs text-red-800 space-y-2 flex-1">
+                              {reviewOutcome.rejected.map((r, i) => (
+                                <li key={i} className="flex flex-col gap-0.5">
+                                  <span className="font-medium">{r.label}</span>
+                                  {r.reason && <span className="text-red-700/90 pl-3 border-l-2 border-red-200">{r.reason}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {reviewOutcome.rejected.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="mt-3 w-full sm:w-auto border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300"
+                            >
+                              Contact administrator
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
             {/* Tiles underneath: 3-column grid aligned with top (Details | Addresses | quads) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 items-start">
               <div className="flex flex-col gap-2 lg:col-span-2">

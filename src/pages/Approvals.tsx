@@ -4,7 +4,7 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { useRolePermissions } from "@/context/RolePermissionsContext";
 import { usePendingMemberChanges } from "@/context/PendingMemberChangesContext";
 import { useRepresentativesSearch } from "@/context/RepresentativesSearchContext";
-import type { PendingChange, ProposedMemberEdits } from "@/context/PendingMemberChangesContext";
+import type { PendingChange, ProposedMemberEdits, ReviewOutcome } from "@/context/PendingMemberChangesContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -200,13 +200,26 @@ const Approvals = () => {
   const handleApprove = (repId: string) => {
     const item = pendingList.find((p) => p.repId === repId);
     if (!item) return;
-    const hasPerFieldDecisions = item.diffRows.some((r) => fieldDecisions[r.fieldKey] !== undefined);
-    if (hasPerFieldDecisions && item.diffRows.length > 0) {
-      const approvedKeys = item.diffRows.map((r) => r.fieldKey).filter((k) => fieldDecisions[k] === "approved");
+    const rows = item.diffRows;
+    const hasPerFieldDecisions = rows.some((r) => fieldDecisions[r.fieldKey] !== undefined);
+    if (hasPerFieldDecisions && rows.length > 0) {
+      const approvedKeys = rows.filter((r) => fieldDecisions[r.fieldKey] === "approved").map((r) => r.fieldKey);
       const partial = buildPartialFromApproved(item.pending.proposed, approvedKeys);
-      approvePendingPartial(repId, partial);
+      const outcome: ReviewOutcome = {
+        submittedAt: item.pending.submittedAt,
+        submittedByRole: item.pending.submittedByRole,
+        accepted: rows.filter((r) => fieldDecisions[r.fieldKey] === "approved").map((r) => ({ fieldKey: r.fieldKey, label: r.label })),
+        rejected: rows.filter((r) => fieldDecisions[r.fieldKey] === "rejected").map((r) => ({ fieldKey: r.fieldKey, label: r.label, reason: fieldRejectReasons[r.fieldKey] ?? "" })),
+      };
+      approvePendingPartial(repId, partial, outcome);
     } else {
-      approvePending(repId);
+      const outcome: ReviewOutcome = {
+        submittedAt: item.pending.submittedAt,
+        submittedByRole: item.pending.submittedByRole,
+        accepted: rows.map((r) => ({ fieldKey: r.fieldKey, label: r.label })),
+        rejected: [],
+      };
+      approvePending(repId, outcome);
     }
     setFieldDecisions({});
     setFieldRejectReasons({});

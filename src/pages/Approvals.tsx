@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   Clock,
   X,
+  XCircle,
   Eye,
   User,
   FileEdit,
@@ -37,6 +38,7 @@ import {
   Users,
   AlertCircle,
   ExternalLink,
+  Save,
 } from "lucide-react";
 import { CLIENTS } from "@/pages/Clients";
 import { getRepresentativeDetails } from "@/data/representativeDetails";
@@ -56,42 +58,42 @@ function getSubmitterLabel(role: PendingChange["submittedByRole"]): string {
   }
 }
 
-/** Build diff rows (label, current, proposed) for display. */
+/** Build diff rows (label, current, proposed, fieldKey) for display. */
 function buildDiffRows(
   current: RepDetails,
   proposed: ProposedMemberEdits
-): { label: string; current: string; proposed: string }[] {
-  const rows: { label: string; current: string; proposed: string }[] = [];
-  const push = (label: string, curr: string | undefined, prop: string | undefined) => {
+): { label: string; current: string; proposed: string; fieldKey: string }[] {
+  const rows: { label: string; current: string; proposed: string; fieldKey: string }[] = [];
+  const push = (label: string, fieldKey: string, curr: string | undefined, prop: string | undefined) => {
     if (prop === undefined) return;
-    rows.push({ label, current: curr ?? "—", proposed: prop ?? "—" });
+    rows.push({ label, current: curr ?? "—", proposed: prop ?? "—", fieldKey });
   };
-  push("Surname", current.surname, proposed.surname);
-  push("Name", current.name, proposed.name);
-  push("Date of birth", current.dateOfBirth, proposed.dateOfBirth);
-  push("Business Name", current.businessName, proposed.businessName);
-  push("Start Date", current.startDate, proposed.startDate);
-  push("End Date", current.endDate, proposed.endDate);
-  push("Service Level", current.serviceLevel, proposed.serviceLevel);
-  push("Note", current.note, proposed.note);
-  push("Dealer Maximums", current.dealerMaximums, proposed.dealerMaximums);
-  push("Manager Maximums", current.managerMaximums, proposed.managerMaximums);
+  push("Surname", "surname", current.surname, proposed.surname);
+  push("Name", "name", current.name, proposed.name);
+  push("Date of birth", "dateOfBirth", current.dateOfBirth, proposed.dateOfBirth);
+  push("Business Name", "businessName", current.businessName, proposed.businessName);
+  push("Start Date", "startDate", current.startDate, proposed.startDate);
+  push("End Date", "endDate", current.endDate, proposed.endDate);
+  push("Service Level", "serviceLevel", current.serviceLevel, proposed.serviceLevel);
+  push("Note", "note", current.note, proposed.note);
+  push("Dealer Maximums", "dealerMaximums", current.dealerMaximums, proposed.dealerMaximums);
+  push("Manager Maximums", "managerMaximums", current.managerMaximums, proposed.managerMaximums);
   if (proposed.officeContact) {
-    push("Office Phone", current.officeContact.phone, proposed.officeContact.phone);
-    push("Office E-mail", current.officeContact.email, proposed.officeContact.email);
+    push("Office Phone", "officeContact.phone", current.officeContact?.phone, proposed.officeContact.phone);
+    push("Office E-mail", "officeContact.email", current.officeContact?.email, proposed.officeContact.email);
   }
   if (proposed.homeContact) {
-    push("Home Phone", current.homeContact.phone, proposed.homeContact.phone);
-    push("Home E-mail", current.homeContact.email, proposed.homeContact.email);
+    push("Home Phone", "homeContact.phone", current.homeContact?.phone, proposed.homeContact.phone);
+    push("Home E-mail", "homeContact.email", current.homeContact?.email, proposed.homeContact.email);
   }
   if (proposed.officeAddress) {
-    push("Office Address", current.officeAddress.address, proposed.officeAddress.address);
-    push("Office City", current.officeAddress.city, proposed.officeAddress.city);
-    push("Office Province", current.officeAddress.province, proposed.officeAddress.province);
-    push("Office Postal", current.officeAddress.postal, proposed.officeAddress.postal);
+    push("Office Address", "officeAddress.address", current.officeAddress?.address, proposed.officeAddress.address);
+    push("Office City", "officeAddress.city", current.officeAddress?.city, proposed.officeAddress.city);
+    push("Office Province", "officeAddress.province", current.officeAddress?.province, proposed.officeAddress.province);
+    push("Office Postal", "officeAddress.postal", current.officeAddress?.postal, proposed.officeAddress.postal);
   }
   if (proposed.residentialAddress) {
-    push("Residential Address", current.residentialAddress.address, proposed.residentialAddress.address);
+    push("Residential Address", "residentialAddress.address", current.residentialAddress?.address, proposed.residentialAddress.address);
   }
   return rows.filter((r) => r.current !== r.proposed);
 }
@@ -115,6 +117,7 @@ const Approvals = () => {
   const {
     pendingByRep,
     approvePending,
+    approvePendingPartial,
     rejectPending,
     getEffectiveDetails,
   } = usePendingMemberChanges();
@@ -123,6 +126,19 @@ const Approvals = () => {
   const [detailRepId, setDetailRepId] = useState<string | null>(null);
   const [rejectRepId, setRejectRepId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
+  const [fieldDecisions, setFieldDecisions] = useState<Record<string, "approved" | "rejected">>({});
+  const [fieldRejectReasons, setFieldRejectReasons] = useState<Record<string, string>>({});
+  const [rejectFieldDialog, setRejectFieldDialog] = useState<{ fieldKey: string; label: string } | null>(null);
+  const [rejectFieldReason, setRejectFieldReason] = useState("");
+
+  useEffect(() => {
+    if (detailRepId) {
+      setFieldDecisions({});
+      setFieldRejectReasons({});
+      setRejectFieldDialog(null);
+      setRejectFieldReason("");
+    }
+  }, [detailRepId]);
 
   useEffect(() => {
     if (!canApproveChanges) navigate("/", { replace: true });
@@ -160,8 +176,40 @@ const Approvals = () => {
     });
   }, [pendingList]);
 
+  /** Build partial ProposedMemberEdits from approved field keys. */
+  const buildPartialFromApproved = (proposed: ProposedMemberEdits, approvedKeys: string[]): ProposedMemberEdits => {
+    const partial: ProposedMemberEdits = {};
+    const raw = proposed as Record<string, unknown>;
+    for (const key of approvedKeys) {
+      if (key.includes(".")) {
+        const [parent, child] = key.split(".");
+        const val = raw[parent];
+        if (val != null && typeof val === "object" && !Array.isArray(val) && child in (val as object)) {
+          (partial as Record<string, unknown>)[parent] = {
+            ...((partial as Record<string, unknown>)[parent] as object),
+            [child]: (val as Record<string, unknown>)[child],
+          };
+        }
+      } else if (key in raw) {
+        (partial as Record<string, unknown>)[key] = raw[key];
+      }
+    }
+    return partial;
+  };
+
   const handleApprove = (repId: string) => {
-    approvePending(repId);
+    const item = pendingList.find((p) => p.repId === repId);
+    if (!item) return;
+    const hasPerFieldDecisions = item.diffRows.some((r) => fieldDecisions[r.fieldKey] !== undefined);
+    if (hasPerFieldDecisions && item.diffRows.length > 0) {
+      const approvedKeys = item.diffRows.map((r) => r.fieldKey).filter((k) => fieldDecisions[k] === "approved");
+      const partial = buildPartialFromApproved(item.pending.proposed, approvedKeys);
+      approvePendingPartial(repId, partial);
+    } else {
+      approvePending(repId);
+    }
+    setFieldDecisions({});
+    setFieldRejectReasons({});
     setDetailRepId(null);
   };
 
@@ -175,7 +223,17 @@ const Approvals = () => {
     rejectPending(rejectRepId, rejectComment.trim());
     setRejectRepId(null);
     setRejectComment("");
+    setFieldDecisions({});
+    setFieldRejectReasons({});
     setDetailRepId(null);
+  };
+
+  const handleRejectFieldConfirm = () => {
+    if (!rejectFieldDialog || !rejectFieldReason.trim()) return;
+    setFieldDecisions((prev) => ({ ...prev, [rejectFieldDialog.fieldKey]: "rejected" }));
+    setFieldRejectReasons((prev) => ({ ...prev, [rejectFieldDialog.fieldKey]: rejectFieldReason.trim() }));
+    setRejectFieldDialog(null);
+    setRejectFieldReason("");
   };
 
   const openInUsersAccess = (repId: string) => {
@@ -381,7 +439,7 @@ const Approvals = () => {
           {detailItem && (
             <ScrollArea className="flex-1 -mx-6 px-6">
               <div className="space-y-3 pb-6">
-                <p className="text-sm font-medium text-gray-700">Changes (current → proposed)</p>
+                <p className="text-sm font-medium text-gray-700">Changes (current → proposed). Use ✓ to approve or ✗ to reject each change.</p>
                 <div className="rounded-lg border border-gray-200 bg-gray-50/50 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
@@ -389,20 +447,56 @@ const Approvals = () => {
                         <th className="text-left py-2 px-3 font-medium text-gray-700">Field</th>
                         <th className="text-left py-2 px-3 font-medium text-gray-700">Current</th>
                         <th className="text-left py-2 px-3 font-medium text-gray-700">Proposed</th>
+                        <th className="text-center py-2 px-2 font-medium text-gray-700 w-24">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {detailItem.diffRows.map((r, i) => (
-                        <tr key={i} className="border-b border-gray-100 last:border-0">
-                          <td className="py-2 px-3 text-gray-600 font-medium">{r.label}</td>
-                          <td className="py-2 px-3">
-                            <span className="text-red-600 line-through">{r.current || "—"}</span>
-                          </td>
-                          <td className="py-2 px-3">
-                            <span className="text-green-700 font-medium">{r.proposed || "—"}</span>
-                          </td>
-                        </tr>
-                      ))}
+                      {detailItem.diffRows.map((r, i) => {
+                        const status = fieldDecisions[r.fieldKey];
+                        const rejectReason = fieldRejectReasons[r.fieldKey];
+                        return (
+                          <tr key={i} className="border-b border-gray-100 last:border-0">
+                            <td className="py-2 px-3 text-gray-600 font-medium">{r.label}</td>
+                            <td className="py-2 px-3">
+                              <span className="text-red-600 line-through">{r.current || "—"}</span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className={`font-medium ${status === "rejected" ? "text-red-700 line-through" : "text-green-700"}`}>
+                                {r.proposed || "—"}
+                              </div>
+                              {status === "rejected" && rejectReason && (
+                                <div className="mt-1.5 rounded bg-red-50 border border-red-100 px-2 py-1.5 text-xs text-red-800">
+                                  <span className="font-semibold">{r.label} — Rejection note:</span> {rejectReason}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2 px-2">
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant={status === "approved" ? "default" : "ghost"}
+                                  className={status === "approved" ? "h-8 w-8 bg-green-600 hover:bg-green-700 text-white" : "h-8 w-8 text-green-600 hover:bg-green-50"}
+                                  onClick={() => setFieldDecisions((prev) => ({ ...prev, [r.fieldKey]: "approved" }))}
+                                  title="Approve this change"
+                                >
+                                  <CheckCircle2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant={status === "rejected" ? "destructive" : "ghost"}
+                                  className={status === "rejected" ? "h-8 w-8" : "h-8 w-8 text-red-600 hover:bg-red-50"}
+                                  onClick={() => setRejectFieldDialog({ fieldKey: r.fieldKey, label: r.label })}
+                                  title="Reject this change"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -430,7 +524,16 @@ const Approvals = () => {
               >
                 Reject
               </Button>
-              {detailItem.canApproveThis && (
+              {detailItem.canApproveThis && Object.keys(fieldDecisions).length > 0 && (
+                <Button
+                  className="bg-green-600 hover:bg-green-700 gap-1.5"
+                  onClick={() => handleApprove(detailItem.repId)}
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Save and apply approved
+                </Button>
+              )}
+              {detailItem.canApproveThis && Object.keys(fieldDecisions).length === 0 && (
                 <Button
                   className="bg-green-600 hover:bg-green-700"
                   onClick={() => handleApprove(detailItem.repId)}
@@ -443,7 +546,7 @@ const Approvals = () => {
         </SheetContent>
       </Sheet>
 
-      {/* Reject comment dialog */}
+      {/* Reject comment dialog (full submission) */}
       <Dialog open={!!rejectRepId} onOpenChange={(open) => !open && setRejectRepId(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -472,6 +575,48 @@ const Approvals = () => {
               disabled={!rejectComment.trim()}
             >
               Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Per-field reject reason dialog */}
+      <Dialog
+        open={!!rejectFieldDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectFieldDialog(null);
+            setRejectFieldReason("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-red-500" />
+              Reject this field
+            </DialogTitle>
+            <DialogDescription>
+              {rejectFieldDialog && (
+                <>
+                  Provide a reason for rejecting the proposed value for <strong>{rejectFieldDialog.label}</strong>. You can still approve other fields and click Approve.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="Reason (required)"
+            value={rejectFieldReason}
+            onChange={(e) => setRejectFieldReason(e.target.value)}
+            rows={3}
+            className="resize-none"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRejectFieldDialog(null); setRejectFieldReason(""); }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleRejectFieldConfirm} disabled={!rejectFieldReason.trim()}>
+              Reject this field
             </Button>
           </DialogFooter>
         </DialogContent>

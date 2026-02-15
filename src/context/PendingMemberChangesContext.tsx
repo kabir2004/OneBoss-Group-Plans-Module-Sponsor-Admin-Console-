@@ -51,6 +51,8 @@ type ContextType = {
   repIdsWithPendingChanges: string[];
   submitPending: (repId: string, proposed: ProposedMemberEdits, submittedByRole?: SubmitterRole) => void;
   approvePending: (repId: string) => void;
+  /** Apply only a subset of the pending proposed edits (e.g. only approved fields), then clear pending. */
+  approvePendingPartial: (repId: string, partialProposed: ProposedMemberEdits) => void;
   rejectPending: (repId: string, comment: string) => void;
   applyDirectEdits: (repId: string, proposed: ProposedMemberEdits) => void;
   getEffectiveDetails: (base: RepDetails) => RepDetails;
@@ -110,6 +112,19 @@ export function PendingMemberChangesProvider({ children }: { children: ReactNode
     });
   }, []);
 
+  const approvePendingPartial = useCallback((repId: string, partialProposed: ProposedMemberEdits) => {
+    setPendingByRep((prev) => {
+      if (!prev[repId]) return prev;
+      setAppliedEditsByRep((a) => ({
+        ...a,
+        [repId]: deepMerge(a[repId] ?? {}, partialProposed) as ProposedMemberEdits,
+      }));
+      const next = { ...prev };
+      delete next[repId];
+      return next;
+    });
+  }, []);
+
   const rejectPending = useCallback((repId: string, comment: string) => {
     setPendingByRep((prev) => {
       const next = { ...prev };
@@ -148,6 +163,7 @@ export function PendingMemberChangesProvider({ children }: { children: ReactNode
     repIdsWithPendingChanges,
     submitPending,
     approvePending,
+    approvePendingPartial,
     rejectPending,
     applyDirectEdits,
     getEffectiveDetails,

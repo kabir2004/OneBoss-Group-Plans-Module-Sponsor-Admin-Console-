@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { useRolePermissions } from '@/context/RolePermissionsContext';
@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { UserPlus, Pencil, UserX, Save, X } from 'lucide-react';
+import { UserPlus, Pencil, UserX, Save, X, Check, XCircle } from 'lucide-react';
 import { useRepresentativesSearch } from '@/context/RepresentativesSearchContext';
 import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
 import type { ProposedMemberEdits, PendingChange, SubmitterRole } from '@/context/PendingMemberChangesContext';
@@ -99,6 +99,7 @@ const UsersAccess = () => {
     getPendingForRep,
     submitPending,
     approvePending,
+    approvePendingPartial,
     rejectPending,
     applyDirectEdits,
   } = usePendingMemberChanges();
@@ -117,6 +118,14 @@ const UsersAccess = () => {
   const [editForm, setEditForm] = useState<ProposedMemberEdits | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
+  /** Per-field approve/reject for proposed changes (key = fieldKey e.g. "name", "officeContact.phone"). */
+  const [fieldDecisions, setFieldDecisions] = useState<Record<string, 'approved' | 'rejected'>>({});
+  const [fieldRejectReasons, setFieldRejectReasons] = useState<Record<string, string>>({});
+  /** Which field's reject-reason dialog is open. */
+  const [rejectFieldDialog, setRejectFieldDialog] = useState<{ fieldKey: string; label: string } | null>(null);
+  const [rejectFieldReason, setRejectFieldReason] = useState('');
+  /** List of field keys in the current diff (set by DiffView) so we can build partial approve. */
+  const [fieldKeysInDiff, setFieldKeysInDiff] = useState<string[]>([]);
   const [inviteSentOpen, setInviteSentOpen] = useState(false);
   const [inviteSentInfo, setInviteSentInfo] = useState<{ name: string; email: string; role: UserRole } | null>(null);
 
@@ -221,6 +230,15 @@ const UsersAccess = () => {
     (isSuperAdmin || (isAdmin && (pending.submittedByRole === 'admin-assistant' || pending.submittedByRole == null)));
   const showDiffView = canSeeApproveReject && pending;
   const canEditTiles = (isAdmin || isAdminAssistant || isSuperAdmin) && !showDiffView;
+
+  // Reset per-field decisions when switching rep or pending changes
+  useEffect(() => {
+    setFieldDecisions({});
+    setFieldRejectReasons({});
+    setFieldKeysInDiff([]);
+    setRejectFieldDialog(null);
+    setRejectFieldReason('');
+  }, [selectedRepresentativeId, pending?.submittedAt]);
   /** Administrator Assistant can only edit Addresses, Office Contact, Home Contact; not Details or Maximums. */
   const canEditTile = (tileId: TileId) => canEditTiles && (!isAdminAssistant || (tileId !== 'details' && tileId !== 'maximums'));
   /** Submitter sees "Changes pending approval": Administrator or Administrator Assistant when they have pending changes. */
@@ -284,8 +302,42 @@ const UsersAccess = () => {
     setEditForm(null);
   };
 
+  /** Build ProposedMemberEdits containing only approved fields (by fieldKey). */
+  const buildPartialFromApproved = (proposed: ProposedMemberEdits, approvedKeys: string[]): ProposedMemberEdits => {
+    const partial: ProposedMemberEdits = {};
+    const raw = proposed as Record<string, unknown>;
+    for (const key of approvedKeys) {
+      if (key.includes('.')) {
+        const [parent, child] = key.split('.');
+        const val = raw[parent];
+        if (val != null && typeof val === 'object' && !Array.isArray(val) && child in (val as object)) {
+          (partial as Record<string, unknown>)[parent] = {
+            ...((partial as Record<string, unknown>)[parent] as object),
+            [child]: (val as Record<string, unknown>)[child],
+          };
+        }
+      } else if (key in raw) {
+        (partial as Record<string, unknown>)[key] = raw[key];
+      }
+    }
+    return partial;
+  };
+
   const handleApprove = () => {
-    if (selectedRepresentativeId) approvePending(selectedRepresentativeId);
+    if (!selectedRepresentativeId) return;
+    const pendingData = getPendingForRep(selectedRepresentativeId);
+    if (!pendingData) return;
+    const hasPerFieldDecisions = fieldKeysInDiff.some((k) => fieldDecisions[k] !== undefined);
+    if (hasPerFieldDecisions && fieldKeysInDiff.length > 0) {
+      const approvedKeys = fieldKeysInDiff.filter((k) => fieldDecisions[k] === 'approved');
+      const partial = buildPartialFromApproved(pendingData.proposed, approvedKeys);
+      approvePendingPartial(selectedRepresentativeId, partial);
+    } else {
+      approvePending(selectedRepresentativeId);
+    }
+    setFieldDecisions({});
+    setFieldRejectReasons({});
+    setFieldKeysInDiff([]);
   };
 
   const handleRejectOpen = () => setRejectOpen(true);
@@ -294,6 +346,17 @@ const UsersAccess = () => {
     rejectPending(selectedRepresentativeId, rejectComment.trim());
     setRejectOpen(false);
     setRejectComment('');
+    setFieldDecisions({});
+    setFieldRejectReasons({});
+    setFieldKeysInDiff([]);
+  };
+
+  const handleRejectFieldConfirm = () => {
+    if (!rejectFieldDialog || !rejectFieldReason.trim()) return;
+    setFieldDecisions((prev) => ({ ...prev, [rejectFieldDialog.fieldKey]: 'rejected' }));
+    setFieldRejectReasons((prev) => ({ ...prev, [rejectFieldDialog.fieldKey]: rejectFieldReason.trim() }));
+    setRejectFieldDialog(null);
+    setRejectFieldReason('');
   };
 
   const submitterLabel = (role?: SubmitterRole | null): string => {
@@ -316,58 +379,82 @@ const UsersAccess = () => {
     }
   };
 
-  function DiffView({ current, proposed, pending }: { current: RepDetails; proposed: ProposedMemberEdits; pending: PendingChange | null }) {
-    const allRows: { label: string; current: string; proposed: string; group: string }[] = [];
-    const push = (group: string, label: string, curr: string | undefined, prop: string | undefined) => {
+  function DiffView({
+    current,
+    proposed,
+    pending,
+    fieldDecisions,
+    fieldRejectReasons,
+    onFieldApprove,
+    onFieldReject,
+    onFieldKeysChange,
+    onSave,
+  }: {
+    current: RepDetails;
+    proposed: ProposedMemberEdits;
+    pending: PendingChange | null;
+    fieldDecisions: Record<string, 'approved' | 'rejected'>;
+    fieldRejectReasons: Record<string, string>;
+    onFieldApprove: (fieldKey: string) => void;
+    onFieldReject: (fieldKey: string, label: string) => void;
+    onFieldKeysChange: (keys: string[]) => void;
+    onSave: () => void;
+  }) {
+    const allRows: { label: string; current: string; proposed: string; group: string; fieldKey: string }[] = [];
+    const push = (group: string, label: string, fieldKey: string, curr: string | undefined, prop: string | undefined) => {
       if (prop === undefined) return;
-      allRows.push({ label, current: curr ?? '—', proposed: prop ?? '—', group });
+      allRows.push({ label, current: curr ?? '—', proposed: prop ?? '—', group, fieldKey });
     };
-    push('Personal', 'Surname', current.surname, proposed.surname);
-    push('Personal', 'Name', current.name, proposed.name);
-    push('Personal', 'Date of birth', current.dateOfBirth, proposed.dateOfBirth);
-    push('Personal', 'Business Name', current.businessName, proposed.businessName);
-    push('Dates', 'Start Date', current.startDate, proposed.startDate);
-    push('Dates', 'End Date', current.endDate, proposed.endDate);
-    push('Service', 'Service Level', current.serviceLevel, proposed.serviceLevel);
-    push('Service', 'Note', current.note, proposed.note);
-    push('Maximums', 'Dealer Maximums', current.dealerMaximums, proposed.dealerMaximums);
-    push('Maximums', 'Manager Maximums', current.managerMaximums, proposed.managerMaximums);
+    push('Personal', 'Surname', 'surname', current.surname, proposed.surname);
+    push('Personal', 'Name', 'name', current.name, proposed.name);
+    push('Personal', 'Date of birth', 'dateOfBirth', current.dateOfBirth, proposed.dateOfBirth);
+    push('Personal', 'Business Name', 'businessName', current.businessName, proposed.businessName);
+    push('Dates', 'Start Date', 'startDate', current.startDate, proposed.startDate);
+    push('Dates', 'End Date', 'endDate', current.endDate, proposed.endDate);
+    push('Service', 'Service Level', 'serviceLevel', current.serviceLevel, proposed.serviceLevel);
+    push('Service', 'Note', 'note', current.note, proposed.note);
+    push('Maximums', 'Dealer Maximums', 'dealerMaximums', current.dealerMaximums, proposed.dealerMaximums);
+    push('Maximums', 'Manager Maximums', 'managerMaximums', current.managerMaximums, proposed.managerMaximums);
     if (proposed.officeContact) {
-      push('Office contact', 'Phone', current.officeContact.phone, proposed.officeContact.phone);
-      push('Office contact', 'Fax', current.officeContact.fax, proposed.officeContact.fax);
-      push('Office contact', 'Cell', current.officeContact.cell, proposed.officeContact.cell);
-      push('Office contact', 'E-mail', current.officeContact.email, proposed.officeContact.email);
-      push('Office contact', 'Residential Address', current.officeContact.residentialAddress, proposed.officeContact.residentialAddress);
+      push('Office contact', 'Phone', 'officeContact.phone', current.officeContact?.phone, proposed.officeContact.phone);
+      push('Office contact', 'Fax', 'officeContact.fax', current.officeContact?.fax, proposed.officeContact.fax);
+      push('Office contact', 'Cell', 'officeContact.cell', current.officeContact?.cell, proposed.officeContact.cell);
+      push('Office contact', 'E-mail', 'officeContact.email', current.officeContact?.email, proposed.officeContact.email);
+      push('Office contact', 'Residential Address', 'officeContact.residentialAddress', current.officeContact?.residentialAddress, proposed.officeContact.residentialAddress);
     }
     if (proposed.homeContact) {
-      push('Home contact', 'Phone', current.homeContact.phone, proposed.homeContact.phone);
-      push('Home contact', 'Fax', current.homeContact.fax, proposed.homeContact.fax);
-      push('Home contact', 'Cell', current.homeContact.cell, proposed.homeContact.cell);
-      push('Home contact', 'E-mail', current.homeContact.email, proposed.homeContact.email);
-      push('Home contact', 'Residential Address', current.homeContact.residentialAddress, proposed.homeContact.residentialAddress);
+      push('Home contact', 'Phone', 'homeContact.phone', current.homeContact?.phone, proposed.homeContact.phone);
+      push('Home contact', 'Fax', 'homeContact.fax', current.homeContact?.fax, proposed.homeContact.fax);
+      push('Home contact', 'Cell', 'homeContact.cell', current.homeContact?.cell, proposed.homeContact.cell);
+      push('Home contact', 'E-mail', 'homeContact.email', current.homeContact?.email, proposed.homeContact.email);
+      push('Home contact', 'Residential Address', 'homeContact.residentialAddress', current.homeContact?.residentialAddress, proposed.homeContact.residentialAddress);
     }
     const addrFields = ['address', 'city', 'province', 'postal', 'country'] as const;
     if (proposed.officeAddress) {
       for (const f of addrFields) {
-        push('Office address', f.charAt(0).toUpperCase() + f.slice(1), current.officeAddress?.[f], proposed.officeAddress?.[f]);
+        push('Office address', f.charAt(0).toUpperCase() + f.slice(1), `officeAddress.${f}`, current.officeAddress?.[f], proposed.officeAddress[f]);
       }
     }
     if (proposed.residentialAddress) {
       for (const f of addrFields) {
-        push('Residential address', f.charAt(0).toUpperCase() + f.slice(1), current.residentialAddress?.[f], proposed.residentialAddress?.[f]);
+        push('Residential address', f.charAt(0).toUpperCase() + f.slice(1), `residentialAddress.${f}`, current.residentialAddress?.[f], proposed.residentialAddress[f]);
       }
     }
     if (proposed.officeMailingAddress) {
       for (const f of addrFields) {
-        push('Office mailing address', f.charAt(0).toUpperCase() + f.slice(1), current.officeMailingAddress?.[f], proposed.officeMailingAddress?.[f]);
+        push('Office mailing address', f.charAt(0).toUpperCase() + f.slice(1), `officeMailingAddress.${f}`, current.officeMailingAddress?.[f], proposed.officeMailingAddress[f]);
       }
     }
     if (proposed.residentialMailingAddress) {
       for (const f of addrFields) {
-        push('Residential mailing address', f.charAt(0).toUpperCase() + f.slice(1), current.residentialMailingAddress?.[f], proposed.residentialMailingAddress?.[f]);
+        push('Residential mailing address', f.charAt(0).toUpperCase() + f.slice(1), `residentialMailingAddress.${f}`, current.residentialMailingAddress?.[f], proposed.residentialMailingAddress[f]);
       }
     }
     const changedRows = allRows.filter((r) => r.current !== r.proposed);
+    const fieldKeysStable = changedRows.map((r) => r.fieldKey).sort().join(',');
+    useEffect(() => {
+      onFieldKeysChange(changedRows.map((r) => r.fieldKey));
+    }, [fieldKeysStable, onFieldKeysChange]);
     const byGroup = changedRows.reduce<Record<string, typeof changedRows>>((acc, r) => {
       if (!acc[r.group]) acc[r.group] = [];
       acc[r.group].push(r);
@@ -398,7 +485,7 @@ const UsersAccess = () => {
               <span><strong>Changes:</strong> {changedRows.length} field{changedRows.length !== 1 ? 's' : ''} modified</span>
             </div>
           )}
-          <p className="text-xs text-gray-500 font-normal mt-1.5">Only modified fields are listed. <span className="text-red-600">Current value</span> → <span className="text-green-700 font-medium">Proposed value</span>.</p>
+          <p className="text-xs text-gray-500 font-normal mt-1.5">Only modified fields are listed. <span className="text-red-600">Current value</span> → <span className="text-green-700 font-medium">Proposed value</span>. Use ✓ to approve or ✗ to reject each change; rejected fields need a reason and won’t be applied when you click Approve above.</p>
         </CardHeader>
         <CardContent className="px-3 pb-3 pt-3">
           {changedRows.length === 0 ? (
@@ -418,30 +505,79 @@ const UsersAccess = () => {
                       <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
                         <colgroup>
                           <col style={{ width: '11rem' }} />
-                          <col style={{ width: '40%' }} />
-                          <col style={{ width: '40%' }} />
+                          <col style={{ width: '36%' }} />
+                          <col style={{ width: '36%' }} />
+                          <col style={{ width: '6rem' }} />
                         </colgroup>
                         <thead>
                           <tr className="bg-gray-50">
                             <th className="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Field</th>
                             <th className="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-red-600">Current value</th>
                             <th className="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-green-700">Proposed value</th>
+                            <th className="text-center py-2 px-2 text-xs font-semibold uppercase tracking-wider text-gray-500 w-24">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {rows.map((r, i) => (
-                            <tr key={i} className="border-t border-gray-100">
-                              <td className="py-2.5 px-4 text-gray-700 font-medium align-top">{r.label}</td>
-                              <td className="py-2.5 px-4 text-red-600 line-through align-top break-words">{r.current || '—'}</td>
-                              <td className="py-2.5 px-4 text-green-700 font-semibold align-top break-words bg-green-50/50">{r.proposed || '—'}</td>
-                            </tr>
-                          ))}
+                          {rows.map((r, i) => {
+                            const status = fieldDecisions[r.fieldKey];
+                            const rejectReason = fieldRejectReasons[r.fieldKey];
+                            return (
+                              <tr key={i} className="border-t border-gray-100">
+                                <td className="py-2.5 px-4 text-gray-700 font-medium align-top">{r.label}</td>
+                                <td className="py-2.5 px-4 text-red-600 line-through align-top break-words">{r.current || '—'}</td>
+                                <td className="py-2.5 px-4 align-top break-words">
+                                  <div className={`font-semibold break-words ${status === 'rejected' ? 'text-red-700 line-through' : 'text-green-700 bg-green-50/50'}`}>
+                                    {r.proposed || '—'}
+                                  </div>
+                                  {status === 'rejected' && rejectReason && (
+                                    <div className="mt-1.5 rounded bg-red-50 border border-red-100 px-2 py-1.5 text-xs text-red-800">
+                                      <span className="font-semibold">{r.label} — Rejection note:</span>{' '}
+                                      {rejectReason}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-2 px-2 align-middle">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant={status === 'approved' ? 'default' : 'ghost'}
+                                      className={`h-8 w-8 shrink-0 ${status === 'approved' ? 'bg-green-600 hover:bg-green-700 text-white' : 'text-green-600 hover:bg-green-50'}`}
+                                      onClick={() => onFieldApprove(r.fieldKey)}
+                                      title="Approve this change"
+                                    >
+                                      <Check className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant={status === 'rejected' ? 'destructive' : 'ghost'}
+                                      className={`h-8 w-8 shrink-0 ${status === 'rejected' ? '' : 'text-red-600 hover:bg-red-50'}`}
+                                      onClick={() => onFieldReject(r.fieldKey, r.label)}
+                                      title="Reject this change"
+                                    >
+                                      <XCircle className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
                   </div>
                 );
               })}
+            </div>
+          )}
+          {changedRows.length > 0 && Object.keys(fieldDecisions).length > 0 && (
+            <div className="mt-4 pt-4 border-t border-amber-200/60 flex flex-wrap items-center gap-2">
+              <p className="text-xs text-gray-600 w-full mb-1">Confirm your decisions above, then save to apply approved changes.</p>
+              <Button size="sm" className="bg-green-600 hover:bg-green-700 gap-1.5" onClick={onSave}>
+                <Save className="h-4 w-4" />
+                Save and apply approved changes
+              </Button>
             </div>
           )}
         </CardContent>
@@ -600,7 +736,17 @@ const UsersAccess = () => {
               </div>
             )}
             {showDiffView && pending ? (
-              <DiffView current={details} proposed={pending.proposed} pending={pending} />
+              <DiffView
+                current={details}
+                proposed={pending.proposed}
+                pending={pending}
+                fieldDecisions={fieldDecisions}
+                fieldRejectReasons={fieldRejectReasons}
+                onFieldApprove={(fieldKey) => setFieldDecisions((prev) => ({ ...prev, [fieldKey]: 'approved' }))}
+                onFieldReject={(fieldKey, label) => setRejectFieldDialog({ fieldKey, label })}
+                onFieldKeysChange={(keys) => setFieldKeysInDiff((prev) => (prev.length === keys.length && prev.every((k, i) => k === keys[i]) ? prev : keys))}
+                onSave={handleApprove}
+              />
             ) : (
             <>
             {/* Top row: Details | Addresses | 4 quads (Office Contact, Home Contact, Codes Rep, Codes T4A) */}
@@ -860,6 +1006,52 @@ const UsersAccess = () => {
             </Button>
             <Button variant="destructive" onClick={handleRejectConfirm} disabled={!rejectComment.trim()}>
               Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Per-field reject reason dialog */}
+      <Dialog
+        open={!!rejectFieldDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectFieldDialog(null);
+            setRejectFieldReason('');
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-red-500" />
+              Reject change
+            </DialogTitle>
+            <DialogDescription>
+              {rejectFieldDialog && (
+                <>
+                  Provide a reason for rejecting the proposed value for <strong>{rejectFieldDialog.label}</strong>. You can still approve other fields and submit.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <Label htmlFor="reject-field-reason">Reason (required)</Label>
+            <Textarea
+              id="reject-field-reason"
+              placeholder="e.g. Invalid format, incorrect information..."
+              value={rejectFieldReason}
+              onChange={(e) => setRejectFieldReason(e.target.value)}
+              rows={3}
+              className="resize-none"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRejectFieldDialog(null); setRejectFieldReason(''); }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleRejectFieldConfirm} disabled={!rejectFieldReason.trim()}>
+              Reject this field
             </Button>
           </DialogFooter>
         </DialogContent>

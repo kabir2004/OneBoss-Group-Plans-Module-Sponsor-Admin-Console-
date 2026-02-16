@@ -226,7 +226,7 @@ const UsersAccess = () => {
   const baseDetails: RepDetails | null = selectedClient ? getRepresentativeDetails(selectedClient.id, selectedClient) : null;
   const details: RepDetails | null = baseDetails ? getEffectiveDetails(baseDetails) : null;
   const pending = selectedRepresentativeId ? getPendingForRep(selectedRepresentativeId) : null;
-  /** Only Administrator and Super Admin see "Submitted for Review" / Approve-Reject. Admin Assistant never sees it. Admin approves only when submitted by Admin Assistant; Super Admin approves all. */
+  /** Only Administrator and Super Admin see Approve/Reject; both can act on Admin Assistant submissions (whoever does it first). Admin Assistant never sees Approve/Reject (they are the submitter). */
   const canSeeApproveReject =
     pending &&
     !isAdminAssistant &&
@@ -921,11 +921,11 @@ const UsersAccess = () => {
                 </Card>
               </div>
             </div>
-            {/* Review outcome — only shown to the person who submitted the changes (Admin sees only their own; Admin Assistant only their own) */}
+            {/* Review outcome — only shown to the submitter: Admin Assistant when they submitted, Admin when they submitted. Both Super Admin and Admin can approve/decline (whoever does it first). */}
             {selectedRepresentativeId && (() => {
               const reviewOutcome = getReviewOutcomeForRep(selectedRepresentativeId);
               if (!reviewOutcome || (reviewOutcome.accepted.length === 0 && reviewOutcome.rejected.length === 0)) return null;
-              if (reviewOutcome.submittedByRole !== role) return null;
+              if (reviewOutcome.submittedByRole == null || reviewOutcome.submittedByRole !== role) return null;
               if (dismissedReviewOutcomeRepIds.includes(selectedRepresentativeId)) return null;
               const submittedText = reviewOutcome.submittedAt
                 ? new Date(reviewOutcome.submittedAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) + ' at ' + new Date(reviewOutcome.submittedAt).toLocaleTimeString(undefined, { timeStyle: 'short' })

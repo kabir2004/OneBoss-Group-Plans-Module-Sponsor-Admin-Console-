@@ -154,8 +154,9 @@ const Approvals = () => {
       const base = client ? getRepresentativeDetails(repId, client) : null;
       const current = base ? getEffectiveDetails(base) : ({} as RepDetails);
       const diffRows = buildDiffRows(current, pending.proposed);
+      /** Both Super Admin and Admin can approve/decline; for Admin Assistant submissions both can act (whoever does it first). */
       const canApproveThis =
-        isSuperAdmin || (isAdmin && pending.submittedByRole === "admin-assistant");
+        isSuperAdmin || (isAdmin && (pending.submittedByRole === "admin-assistant" || pending.submittedByRole == null));
       return {
         repId,
         repName,

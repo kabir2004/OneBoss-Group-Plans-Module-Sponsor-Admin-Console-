@@ -625,7 +625,7 @@ const UsersAccess = () => {
           <CardTitle className="text-sm font-semibold">Edit details</CardTitle>
         </CardHeader>
         <CardContent className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-          {(['surname', 'name', 'dateOfBirth', 'businessName', 'startDate', 'endDate', 'serviceLevel', 'note'] as const).map((key) => (
+          {(['surname', 'name', 'dateOfBirth', 'startDate', 'endDate', 'note'] as const).map((key) => (
             <div key={key} className="grid gap-1.5">
               <Label className="text-sm font-medium text-gray-700">{getFieldLabel(key)}</Label>
               <Input value={form[key] ?? ''} onChange={(e) => update(key, e.target.value)} className="h-8 text-sm" />
@@ -784,7 +784,7 @@ const UsersAccess = () => {
                   <div className="transition-opacity duration-150 ease-out space-y-0.5">
                   {editingTile === 'details' && editForm ? (
                     <div className="grid grid-cols-1 gap-1 text-sm">
-                      {(['surname', 'name', 'dateOfBirth', 'businessName', 'startDate', 'endDate', 'serviceLevel', 'note'] as const).map((key) => (
+                      {(['surname', 'name', 'dateOfBirth', 'startDate', 'endDate', 'note'] as const).map((key) => (
                         <div key={key} className="flex items-center gap-2">
                           <Label className="text-sm font-medium text-gray-700 w-24 shrink-0">{getFieldLabel(key)}</Label>
                           <Input value={editForm[key] ?? ''} onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })} className="h-6 text-sm flex-1 min-w-0" />
@@ -794,18 +794,11 @@ const UsersAccess = () => {
                   ) : (
                     <>
                       <DetailRow large label="ID" value={details.id} />
-                      <DetailRow large label="NRD Number" value={details.nrdNumber} />
                       <DetailRow large label="Surname" value={details.surname} />
                       <DetailRow large label="Name" value={details.name} />
                       <DetailRow large label="Date of birth" value={details.dateOfBirth} />
-                      <DetailRow large label="MR-72 On File" value={details.mr72OnFile} />
-                      <DetailRow large label="MR-72 On File Date" value={details.mr72OnFileDate} />
-                      <DetailRow large label="Business Name" value={details.businessName} />
-                      <DetailRow large label="Federal BN" value={details.federalBN} />
-                      <DetailRow large label="Provincial BN" value={details.provincialBN} />
                       <DetailRow large label="Start Date" value={details.startDate} />
                       <DetailRow large label="End Date" value={details.endDate} />
-                      <DetailRow large label="Service Level" value={details.serviceLevel} />
                       <DetailRow large label="Note" value={details.note} />
                     </>
                   )}

@@ -1,22 +1,17 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useInterface } from '@/context/InterfaceContext';
-import type { InterfaceType } from '@/components/InterfaceSwitcher';
+import type { InterfaceType } from '@/context/InterfaceContext';
+import { useRoles } from '@/context/RoleContext';
 
-export type Role = InterfaceType; // 'super-admin' | 'admin' | 'admin-assistant'
+export type Role = InterfaceType;
 
 interface RolePermissionsContextType {
   role: Role;
-  /** Administrator: false. Administrator Assistant + Super Admin: true. */
   canManageUsers: boolean;
-  /** All roles can view Users & Access and member details (Administrator can submit edits for approval). */
   canViewUsersAccess: boolean;
-  /** Administrator: false (no configure). Administrator Assistant + Super Admin: true. */
   canConfigure: boolean;
-  /** Administrator: false. Administrator Assistant + Super Admin: true (approve changes). */
   canApproveChanges: boolean;
-  /** Only Super Admin can manage admins (e.g. edit Super Admin/Admin roles). */
   canManageAdmins: boolean;
-  /** Super Admin has full control. */
   isSuperAdmin: boolean;
   isAdmin: boolean;
   isAdminAssistant: boolean;
@@ -26,11 +21,13 @@ const RolePermissionsContext = createContext<RolePermissionsContextType | undefi
 
 export function RolePermissionsProvider({ children }: { children: ReactNode }) {
   const { currentInterface } = useInterface();
+  const { getRoleOrder } = useRoles();
   const role = currentInterface;
+  const order = getRoleOrder(role);
 
-  const isSuperAdmin = role === 'super-admin';
-  const isAdmin = role === 'admin';
-  const isAdminAssistant = role === 'admin-assistant';
+  const isSuperAdmin = order === 0;
+  const isAdmin = order === 1;
+  const isAdminAssistant = order >= 2;
 
   const canManageUsers = isSuperAdmin || isAdminAssistant;
   const canViewUsersAccess = true;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { useRolePermissions } from '@/context/RolePermissionsContext';
@@ -32,19 +32,21 @@ import {
 } from '@/components/ui/select';
 import { UserPlus, Pencil, UserX, Save, X, Check, XCircle } from 'lucide-react';
 import { useRepresentativesSearch } from '@/context/RepresentativesSearchContext';
+import { useInterface } from '@/context/InterfaceContext';
+import { useRoles } from '@/context/RoleContext';
 import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
 import type { ProposedMemberEdits, PendingChange, SubmitterRole, ReviewOutcome } from '@/context/PendingMemberChangesContext';
 import { getRepresentativeDetails } from '@/data/representativeDetails';
 
-/** List of 6 people shown under "+ Administrator" on Administrator page (sidebar). 1 Super Admin, 2 Admin, 3 Admin Assistant. Has full fields for detail panel. */
-type UsersAccessRep = { id: string; name: string; status: string; role: 'Super Administrator' | 'Administrator' | 'Administrator Assistant'; email: string; city: string; province: string; accountNumber: string };
+/** List of 6 people shown under "+ Administrator" on Administrator page (sidebar). role = role id from RoleContext. */
+type UsersAccessRep = { id: string; name: string; status: string; role: string; email: string; city: string; province: string; accountNumber: string };
 const USERS_ACCESS_REPRESENTATIVES: UsersAccessRep[] = [
-  { id: 'UA1', name: 'Morgan Reeves', role: 'Super Administrator', email: 'morgan.reeves@example.com', city: 'Calgary', province: 'AB', accountNumber: 'UA1', status: 'Active' },
-  { id: 'UA2', name: 'Jordan Blake', role: 'Administrator', email: 'jordan.blake@example.com', city: 'Halifax', province: 'NS', accountNumber: 'UA2', status: 'Active' },
-  { id: 'UA3', name: 'Riley Sutton', role: 'Administrator', email: 'riley.sutton@example.com', city: 'Winnipeg', province: 'MB', accountNumber: 'UA3', status: 'Active' },
-  { id: 'UA4', name: 'Casey Quinn', role: 'Administrator Assistant', email: 'casey.quinn@example.com', city: 'Edmonton', province: 'AB', accountNumber: 'UA4', status: 'Active' },
-  { id: 'UA5', name: 'Skyler Hayes', role: 'Administrator Assistant', email: 'skyler.hayes@example.com', city: 'Ottawa', province: 'ON', accountNumber: 'UA5', status: 'Active' },
-  { id: 'UA6', name: 'Avery Cross', role: 'Administrator Assistant', email: 'avery.cross@example.com', city: 'Victoria', province: 'BC', accountNumber: 'UA6', status: 'Active' },
+  { id: 'UA1', name: 'Morgan Reeves', role: 'super-admin', email: 'morgan.reeves@example.com', city: 'Calgary', province: 'AB', accountNumber: 'UA1', status: 'Active' },
+  { id: 'UA2', name: 'Jordan Blake', role: 'admin', email: 'jordan.blake@example.com', city: 'Halifax', province: 'NS', accountNumber: 'UA2', status: 'Active' },
+  { id: 'UA3', name: 'Riley Sutton', role: 'admin', email: 'riley.sutton@example.com', city: 'Winnipeg', province: 'MB', accountNumber: 'UA3', status: 'Active' },
+  { id: 'UA4', name: 'Casey Quinn', role: 'admin-assistant', email: 'casey.quinn@example.com', city: 'Edmonton', province: 'AB', accountNumber: 'UA4', status: 'Active' },
+  { id: 'UA5', name: 'Skyler Hayes', role: 'admin-assistant', email: 'skyler.hayes@example.com', city: 'Ottawa', province: 'ON', accountNumber: 'UA5', status: 'Active' },
+  { id: 'UA6', name: 'Avery Cross', role: 'admin-assistant', email: 'avery.cross@example.com', city: 'Victoria', province: 'BC', accountNumber: 'UA6', status: 'Active' },
 ];
 import type { RepDetails } from '@/data/representativeDetails';
 import { Textarea } from '@/components/ui/textarea';
@@ -105,6 +107,7 @@ const getFieldLabel = (key: string) => FIELD_LABELS[key] ?? key.replace(/([A-Z])
 const UsersAccess = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { currentInterface } = useInterface();
   const { canManageUsers, canViewUsersAccess, canManageAdmins, isAdmin, isAdminAssistant, isSuperAdmin, role } = useRolePermissions();
   const {
     getEffectiveDetails,
@@ -116,6 +119,7 @@ const UsersAccess = () => {
     rejectPending,
     applyDirectEdits,
   } = usePendingMemberChanges();
+  const [roleOverrides, setRoleOverrides] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editRoleOpen, setEditRoleOpen] = useState(false);
@@ -145,15 +149,30 @@ const UsersAccess = () => {
   const [dismissedReviewOutcomeRepIds, setDismissedReviewOutcomeRepIds] = useState<string[]>([]);
 
   const { setRepresentativesCount, setRepresentativesList, selectedRepresentativeId } = useRepresentativesSearch();
+  const { getRoleOrder, getRolesBelow, getRoleById } = useRoles();
 
   useEffect(() => {
     if (!canViewUsersAccess) navigate('/', { replace: true });
   }, [canViewUsersAccess, navigate]);
 
+  const currentUserOrder = getRoleOrder(currentInterface);
+  const filteredAdminReps = useMemo(() => {
+    return USERS_ACCESS_REPRESENTATIVES.filter((r) => {
+      const repRoleId = roleOverrides[r.id] ?? r.role;
+      return getRoleOrder(repRoleId) > currentUserOrder;
+    });
+  }, [currentInterface, currentUserOrder, roleOverrides, getRoleOrder]);
+
   useEffect(() => {
-    setRepresentativesCount(USERS_ACCESS_REPRESENTATIVES.length);
-    setRepresentativesList(USERS_ACCESS_REPRESENTATIVES.map((c) => ({ id: c.id, name: c.name, status: c.status, role: c.role })));
-  }, [setRepresentativesCount, setRepresentativesList]);
+    const list = filteredAdminReps.map((c) => ({
+      id: c.id,
+      name: c.name,
+      status: c.status,
+      role: roleOverrides[c.id] ?? c.role,
+    }));
+    setRepresentativesCount(list.length);
+    setRepresentativesList(list);
+  }, [filteredAdminReps, roleOverrides, setRepresentativesCount, setRepresentativesList]);
 
   // Open invite modal with role when navigating from sidebar "+ Administrator" / "+ Administrator Assistant"
   useEffect(() => {
@@ -238,26 +257,10 @@ const UsersAccess = () => {
   const baseDetails: RepDetails | null = selectedClient ? getRepresentativeDetails(selectedClient.id, selectedClient) : null;
   const details: RepDetails | null = baseDetails ? getEffectiveDetails(baseDetails) : null;
   const pending = selectedRepresentativeId ? getPendingForRep(selectedRepresentativeId) : null;
-  /** Only Administrator and Super Admin see Approve/Reject; both can act on Admin Assistant submissions (whoever does it first). Admin Assistant never sees Approve/Reject (they are the submitter). */
-  const canSeeApproveReject =
-    pending &&
-    !isAdminAssistant &&
-    (isSuperAdmin || (isAdmin && (pending.submittedByRole === 'admin-assistant' || pending.submittedByRole == null)));
-  const showDiffView = canSeeApproveReject && pending;
-  const canEditTiles = (isAdmin || isAdminAssistant || isSuperAdmin) && !showDiffView;
-
-  // Reset per-field decisions when switching rep or pending changes
-  useEffect(() => {
-    setFieldDecisions({});
-    setFieldRejectReasons({});
-    setFieldRowsInDiff([]);
-    setRejectFieldDialog(null);
-    setRejectFieldReason('');
-  }, [selectedRepresentativeId, pending?.submittedAt]);
-  /** Administrator Assistant can only edit Addresses, Office Contact, Home Contact; not Details or Maximums. */
-  const canEditTile = (tileId: TileId) => canEditTiles && (!isAdminAssistant || (tileId !== 'details' && tileId !== 'maximums'));
-  /** Submitter sees "Changes pending approval": Administrator or Administrator Assistant when they have pending changes. */
-  const showPendingBanner = pending && (isAdmin || isAdminAssistant);
+  const effectiveRoleId: string | null = selectedClient ? (roleOverrides[selectedClient.id] ?? selectedClient.role) : null;
+  const assignableRoles = getRolesBelow(currentInterface);
+  const canChangeRole = assignableRoles.length > 0 && selectedClient && effectiveRoleId != null;
+  const effectiveRoleDisplayName = effectiveRoleId ? getRoleById(effectiveRoleId)?.name ?? effectiveRoleId : '—';
 
   const handleStartEditTile = (tileId: TileId) => {
     if (!details) return;
@@ -737,346 +740,38 @@ const UsersAccess = () => {
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">User must select a person from the list to see more info.</p>
           </div>
-        ) : details ? (
+        ) : baseDetails && selectedClient ? (
           <>
-            <div className="flex items-center justify-between gap-2 border-b border-gray-200 pb-0.5 mb-1">
+            <div className="border-b border-gray-200 pb-2 mb-3">
               <h2 className="text-sm font-semibold text-gray-900">
-                Details {details.surname}, {details.name}
+                {baseDetails.surname}, {baseDetails.name}
               </h2>
-              <div className="flex items-center gap-2">
-                {showDiffView && (
-                  <>
-                    <span className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded">Submitted for Review</span>
-                    <Button size="sm" variant="default" className="h-7 text-xs" onClick={handleApprove}>
-                      Approve
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-200" onClick={handleRejectOpen}>
-                      Reject
-                    </Button>
-                  </>
-                )}
-              </div>
             </div>
-            {showPendingBanner && (
-              <div className="mb-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                Changes pending approval
-              </div>
-            )}
-            {showDiffView && pending ? (
-              <DiffView
-                current={details}
-                proposed={pending.proposed}
-                pending={pending}
-                fieldDecisions={fieldDecisions}
-                fieldRejectReasons={fieldRejectReasons}
-                onFieldApprove={(fieldKey) => setFieldDecisions((prev) => ({ ...prev, [fieldKey]: 'approved' }))}
-                onFieldReject={(fieldKey, label) => setRejectFieldDialog({ fieldKey, label })}
-                onFieldKeysChange={(rows) => setFieldRowsInDiff((prev) => (prev.length === rows.length && rows.every((r, i) => prev[i]?.fieldKey === r.fieldKey) ? prev : rows))}
-                onSave={handleApprove}
-              />
-            ) : (
-            <>
-            {/* Top row: Details | Addresses | 4 quads (Office Contact, Home Contact, Codes Rep, Codes T4A) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 items-stretch mb-2">
-              <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0 transition-[min-height] duration-150 ease-out">
-                <TileHeader tileId="details" title="Details" />
-                <CardContent className="px-2 py-1.5 flex-1 overflow-auto min-h-0">
-                  <div className="transition-opacity duration-150 ease-out space-y-0.5">
-                  {editingTile === 'details' && editForm ? (
-                    <div className="grid grid-cols-1 gap-1 text-sm">
-                      {(['surname', 'name', 'dateOfBirth', 'startDate', 'endDate', 'note'] as const).map((key) => (
-                        <div key={key} className="flex items-center gap-2">
-                          <Label className="text-sm font-medium text-gray-700 w-24 shrink-0">{getFieldLabel(key)}</Label>
-                          <Input value={editForm[key] ?? ''} onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })} className="h-6 text-sm flex-1 min-w-0" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <>
-                      <DetailRow large label="ID" value={details.id} />
-                      <DetailRow large label="Surname" value={details.surname} />
-                      <DetailRow large label="Name" value={details.name} />
-                      <DetailRow large label="Date of birth" value={details.dateOfBirth} />
-                      <DetailRow large label="Start Date" value={details.startDate} />
-                      <DetailRow large label="End Date" value={details.endDate} />
-                      <DetailRow large label="Note" value={details.note} />
-                    </>
-                  )}
+            <Card className="border border-gray-200 shadow-sm max-w-md">
+              <CardContent className="pt-4 pb-4 px-4 space-y-4">
+                <DetailRow large label="First name" value={baseDetails.name} />
+                <DetailRow large label="Last name" value={baseDetails.surname} />
+                <DetailRow large label="Role" value={effectiveRoleDisplayName} />
+                {canChangeRole && (
+                  <div className="space-y-2 pt-1">
+                    <Label className="text-sm font-medium text-gray-700">Change role</Label>
+                    <Select
+                      value={effectiveRoleId!}
+                      onValueChange={(value) => selectedRepresentativeId && setRoleOverrides((prev) => ({ ...prev, [selectedRepresentativeId]: value }))}
+                    >
+                      <SelectTrigger className="w-full max-w-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {assignableRoles.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                </CardContent>
-              </Card>
-              {/* 4 address quads: Office | Residential | Office Mailing | Res. Mailing */}
-              <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0 transition-[min-height] duration-150 ease-out">
-                <TileHeader tileId="addresses" title="Addresses" />
-                <CardContent className="p-2 grid grid-cols-2 grid-rows-2 gap-2 flex-1 min-h-0 overflow-auto min-h-[300px]">
-                  {editingTile === 'addresses' && editForm ? (
-                    <>
-                      {(['officeAddress', 'residentialAddress', 'officeMailingAddress', 'residentialMailingAddress'] as const).map((key) => (
-                        <Card key={key} className="border border-gray-200 p-2">
-                          <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">{getFieldLabel(key)}</p>
-                          {editForm[key] && (['address', 'city', 'province', 'postal', 'country'] as const).map((f) => (
-                            <div key={f} className="flex items-center gap-2 mb-1">
-                              <Label className="text-xs font-medium text-gray-700 w-16 shrink-0">{getFieldLabel(f)}</Label>
-                              <Input
-                                value={editForm[key]![f] ?? ''}
-                                onChange={(e) => setEditForm({ ...editForm, [key]: { ...editForm[key], [f]: e.target.value } })}
-                                className="h-6 text-xs flex-1"
-                              />
-                            </div>
-                          ))}
-                        </Card>
-                      ))}
-                    </>
-                  ) : (
-                    <>
-                      <Card className="border border-gray-200 shadow-sm p-2 min-h-0">
-                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Office</p>
-                        <DetailRow large label="Address" value={details.officeAddress.address} />
-                        <DetailRow large label="City" value={details.officeAddress.city} />
-                        <DetailRow large label="Province" value={details.officeAddress.province} />
-                        <DetailRow large label="Postal" value={details.officeAddress.postal} />
-                        <DetailRow large label="Country" value={details.officeAddress.country} />
-                      </Card>
-                      <Card className="border border-gray-200 shadow-sm p-2 min-h-0">
-                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Residential</p>
-                        <DetailRow large label="Address" value={details.residentialAddress.address} />
-                        <DetailRow large label="City" value={details.residentialAddress.city} />
-                        <DetailRow large label="Province" value={details.residentialAddress.province} />
-                        <DetailRow large label="Postal" value={details.residentialAddress.postal} />
-                        <DetailRow large label="Country" value={details.residentialAddress.country} />
-                      </Card>
-                      <Card className="border border-gray-200 shadow-sm p-2 min-h-0">
-                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Office Mailing</p>
-                        <DetailRow large label="Address" value={details.officeMailingAddress.address} />
-                        <DetailRow large label="City" value={details.officeMailingAddress.city} />
-                        <DetailRow large label="Province" value={details.officeMailingAddress.province} />
-                        <DetailRow large label="Postal" value={details.officeMailingAddress.postal} />
-                        <DetailRow large label="Country" value={details.officeMailingAddress.country} />
-                      </Card>
-                      <Card className="border border-gray-200 shadow-sm p-2 min-h-0">
-                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Res. Mailing</p>
-                        <DetailRow large label="Address" value={details.residentialMailingAddress.address} />
-                        <DetailRow large label="City" value={details.residentialMailingAddress.city} />
-                        <DetailRow large label="Province" value={details.residentialMailingAddress.province} />
-                        <DetailRow large label="Postal" value={details.residentialMailingAddress.postal} />
-                        <DetailRow large label="Country" value={details.residentialMailingAddress.country} />
-                      </Card>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-              <div className="grid grid-cols-2 grid-rows-2 gap-2 h-full min-h-0">
-                <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0 transition-[min-height] duration-150 ease-out">
-                  <TileHeader tileId="officeContact" title="Office Contact" />
-                  <CardContent className="px-2 pb-2 flex-1 min-h-0 overflow-auto text-sm min-h-[140px]">
-                    <div className="min-h-[120px] transition-opacity duration-150 ease-out">
-                    {editingTile === 'officeContact' && editForm?.officeContact ? (
-                      <div className="space-y-1.5 text-sm">
-                        {(['phone', 'fax', 'cell', 'email', 'residentialAddress'] as const).map((f) => (
-                          <div key={f} className="flex items-center gap-2">
-                            <Label className="text-sm font-medium text-gray-700 w-28 shrink-0">{getFieldLabel(f)}</Label>
-                            <Input
-                              value={editForm.officeContact[f] ?? ''}
-                              onChange={(e) => setEditForm({ ...editForm, officeContact: { ...editForm.officeContact, [f]: e.target.value } })}
-                              className="h-7 text-sm flex-1"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <>
-                        <DetailRow large label="Phone" value={details.officeContact.phone} />
-                        <DetailRow large label="Fax" value={details.officeContact.fax} />
-                        <DetailRow large label="Cell" value={details.officeContact.cell} />
-                        <DetailRow large label="E-mail" value={details.officeContact.email} />
-                        <DetailRow large label="Residential Address" value={details.officeContact.residentialAddress} />
-                      </>
-                    )}
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="border border-gray-200 shadow-sm w-full p-0 h-full flex flex-col min-h-0 transition-[min-height] duration-150 ease-out">
-                  <TileHeader tileId="homeContact" title="Home Contact" />
-                  <CardContent className="px-2 pb-2 flex-1 min-h-0 overflow-auto text-sm min-h-[140px]">
-                    <div className="min-h-[120px] transition-opacity duration-150 ease-out">
-                    {editingTile === 'homeContact' && editForm?.homeContact ? (
-                      <div className="space-y-1.5 text-sm">
-                        {(['phone', 'fax', 'cell', 'email', 'residentialAddress'] as const).map((f) => (
-                          <div key={f} className="flex items-center gap-2">
-                            <Label className="text-sm font-medium text-gray-700 w-28 shrink-0">{getFieldLabel(f)}</Label>
-                            <Input
-                              value={editForm.homeContact[f] ?? ''}
-                              onChange={(e) => setEditForm({ ...editForm, homeContact: { ...editForm.homeContact, [f]: e.target.value } })}
-                              className="h-7 text-sm flex-1"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <>
-                        <DetailRow large label="Phone" value={details.homeContact.phone} />
-                        <DetailRow large label="Fax" value={details.homeContact.fax} />
-                        <DetailRow large label="Cell" value={details.homeContact.cell} />
-                        <DetailRow large label="E-mail" value={details.homeContact.email} />
-                        <DetailRow large label="Residential Address" value={details.homeContact.residentialAddress} />
-                      </>
-                    )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-            {/* Review outcome — only shown to the submitter: Admin Assistant when they submitted, Admin when they submitted. Both Super Admin and Admin can approve/decline (whoever does it first). */}
-            {selectedRepresentativeId && (() => {
-              const reviewOutcome = getReviewOutcomeForRep(selectedRepresentativeId);
-              if (!reviewOutcome || (reviewOutcome.accepted.length === 0 && reviewOutcome.rejected.length === 0)) return null;
-              if (reviewOutcome.submittedByRole == null || reviewOutcome.submittedByRole !== role) return null;
-              if (dismissedReviewOutcomeRepIds.includes(selectedRepresentativeId)) return null;
-              const submittedText = reviewOutcome.submittedAt
-                ? new Date(reviewOutcome.submittedAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) + ' at ' + new Date(reviewOutcome.submittedAt).toLocaleTimeString(undefined, { timeStyle: 'short' })
-                : '';
-              return (
-                <div className="mt-2 w-full">
-                  <Card className="border border-blue-200/80 bg-blue-50/30 w-full relative">
-                    <CardHeader className="py-3 px-4 pr-10 border-b border-blue-200/60">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-2 right-2 h-7 w-7 text-gray-500 hover:text-gray-700 hover:bg-blue-100/50 rounded-full"
-                        onClick={() => setDismissedReviewOutcomeRepIds((prev) => (prev.includes(selectedRepresentativeId!) ? prev : [...prev, selectedRepresentativeId!]))}
-                        aria-label="Close notice"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                      <CardTitle className="text-sm font-semibold text-gray-900">Review outcome — your submission</CardTitle>
-                      {submittedText && (
-                        <p className="text-xs text-gray-600 font-normal mt-0.5">Submitted {submittedText}</p>
-                      )}
-                      <p className="text-xs text-gray-500 font-normal mt-1">Summary of what was accepted and rejected by the reviewer.</p>
-                    </CardHeader>
-                    <CardContent className="px-4 py-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="rounded-lg border border-green-200 bg-green-50/50 p-3">
-                          <h4 className="text-xs font-semibold uppercase tracking-wider text-green-800 mb-2 flex items-center gap-1.5">
-                            <Check className="h-3.5 w-3.5" />
-                            Accepted ({reviewOutcome.accepted.length})
-                          </h4>
-                          {reviewOutcome.accepted.length === 0 ? (
-                            <p className="text-xs text-green-700/80">No fields were accepted.</p>
-                          ) : (
-                            <ul className="text-xs text-green-800 space-y-1">
-                              {reviewOutcome.accepted.map((a, i) => (
-                                <li key={i} className="flex items-center gap-1.5">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-green-600 shrink-0" />
-                                  {a.label}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                        <div className="rounded-lg border border-red-200 bg-red-50/50 p-3 flex flex-col">
-                          <h4 className="text-xs font-semibold uppercase tracking-wider text-red-800 mb-2 flex items-center gap-1.5">
-                            <XCircle className="h-3.5 w-3.5" />
-                            Rejected ({reviewOutcome.rejected.length})
-                          </h4>
-                          {reviewOutcome.rejected.length === 0 ? (
-                            <p className="text-xs text-red-700/80">No fields were rejected.</p>
-                          ) : (
-                            <ul className="text-xs text-red-800 space-y-2 flex-1">
-                              {reviewOutcome.rejected.map((r, i) => (
-                                <li key={i} className="flex flex-col gap-0.5">
-                                  <span className="font-medium">{r.label}</span>
-                                  {r.reason && <span className="text-red-700/90 pl-3 border-l-2 border-red-200">{r.reason}</span>}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                          {reviewOutcome.rejected.length > 0 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="mt-3 w-full sm:w-auto border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300"
-                            >
-                              Contact administrator
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              );
-            })()}
-            {/* Tiles underneath: 3-column grid aligned with top (Details | Addresses | quads) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 items-start">
-              <div className="flex flex-col gap-2 lg:col-span-2">
-                <Card className="border border-gray-200 shadow-sm w-full p-0">
-                  <ReadOnlyTileHeader title="My Documents" />
-                  <CardContent className="px-3 pb-3">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-gray-50">
-                          <TableHead className="text-xs h-8 py-1.5">By</TableHead>
-                          <TableHead className="text-xs h-8 py-1.5">Date</TableHead>
-                          <TableHead className="text-xs h-8 py-1.5">Description</TableHead>
-                          <TableHead className="text-xs h-8 py-1.5 w-14">View</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {details.documents.slice(0, 3).map((doc, i) => (
-                          <TableRow key={i} className="border-b border-gray-100">
-                            <TableCell className="text-xs py-1.5">{doc.uploadedBy || '—'}</TableCell>
-                            <TableCell className="text-xs py-1.5">{doc.dateCreated}</TableCell>
-                            <TableCell className="text-xs py-1.5 min-w-[120px]">{doc.description}</TableCell>
-                            <TableCell className="py-1.5"><Button variant="ghost" size="sm" className="h-6 text-xs px-1">View</Button></TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-                <div className="flex flex-row gap-2">
-                  <Card className="border border-gray-200 shadow-sm flex-1 min-w-0 p-0 transition-[min-height] duration-150 ease-out">
-                    <TileHeader tileId="maximums" title="Maximums" />
-                    <CardContent className="px-3 pb-3 min-h-[88px]">
-                      <div className="min-h-[72px] transition-opacity duration-150 ease-out">
-                      {editingTile === 'maximums' && editForm ? (
-                        <div className="space-y-1.5 text-sm">
-                          <div className="flex items-center gap-2">
-                            <Label className="text-sm font-medium text-gray-700 w-36 shrink-0">Dealer Maximums</Label>
-                            <Input value={editForm.dealerMaximums ?? ''} onChange={(e) => setEditForm({ ...editForm, dealerMaximums: e.target.value })} className="h-7 text-sm flex-1" />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Label className="text-sm font-medium text-gray-700 w-36 shrink-0">Manager Maximums</Label>
-                            <Input value={editForm.managerMaximums ?? ''} onChange={(e) => setEditForm({ ...editForm, managerMaximums: e.target.value })} className="h-7 text-sm flex-1" />
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <DetailRow large label="Dealer Maximums" value={details.dealerMaximums} />
-                          <DetailRow large label="Manager Maximums" value={details.managerMaximums} />
-                        </>
-                      )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="border border-gray-200 shadow-sm flex-1 min-w-0 p-0">
-                    <ReadOnlyTileHeader title="Photo" />
-                    <CardContent className="w-full min-h-[88px] px-3 pb-3 flex flex-col justify-center items-center">
-                      <div className="flex flex-row items-center justify-center gap-2 flex-wrap w-full">
-                        <Button variant="outline" size="sm" className="h-8 text-sm px-3 shrink-0">+ Choose</Button>
-                        <Button variant="outline" size="sm" className="h-8 text-sm px-3 shrink-0">Upload</Button>
-                        <Button size="sm" className="h-8 text-sm px-3 shrink-0">Update Photo</Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </div>
-            </>
-            )}
+                )}
+              </CardContent>
+            </Card>
           </>
         ) : null}
       </div>

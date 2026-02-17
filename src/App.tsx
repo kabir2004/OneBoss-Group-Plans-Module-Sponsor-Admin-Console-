@@ -13,17 +13,15 @@ import ClientDetails from "./pages/ClientDetails";
 import UsersAccess from "./pages/UsersAccess";
 import Settings from "./pages/Settings";
 import TrustDeposits from "./pages/TrustDeposits";
-import Households from "./pages/Households";
-import IncomePlans from "./pages/IncomePlans";
-import Approvals from "./pages/Approvals";
-import Reports from "./pages/Reports";
 import AdvancedSearch from "./pages/AdvancedSearch";
+import GroupContributions from "./pages/GroupContributions";
 import { AuthProvider } from "./context/AuthContext";
 import { RepresentativesSearchProvider } from "./context/RepresentativesSearchContext";
 import { PendingMemberChangesProvider } from "./context/PendingMemberChangesContext";
 import { InterfaceProvider } from "./context/InterfaceContext";
 import { SponsorProvider } from "./context/SponsorContext";
 import { MenuVisibilityProvider } from "./context/MenuVisibilityContext";
+import { RoleProvider } from "./context/RoleContext";
 import { RolePermissionsProvider } from "./context/RolePermissionsContext";
 import { AddMemberModalProvider } from "./context/AddMemberModalContext";
 
@@ -71,7 +69,8 @@ const App = () => {
     >
       <QueryClientProvider client={queryClient}>
         <AuthProvider value={{ signOut: handleSignOut }}>
-          <InterfaceProvider>
+          <RoleProvider>
+            <InterfaceProvider>
             <RolePermissionsProvider>
             <SponsorProvider>
             <MenuVisibilityProvider>
@@ -88,12 +87,9 @@ const App = () => {
                   <Route path="/plan-members" element={<Clients />} />
                   <Route path="/plan-members/:id" element={<ClientDetails />} />
                   <Route path="/administrator" element={<UsersAccess />} />
+                  <Route path="/group-contributions" element={<GroupContributions />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/trust-deposits" element={<TrustDeposits />} />
-                  <Route path="/households" element={<Households />} />
-                  <Route path="/income-plans" element={<IncomePlans />} />
-                  <Route path="/approvals" element={<Approvals />} />
-                  <Route path="/reports" element={<Reports />} />
                   <Route path="/advanced-search" element={<AdvancedSearch />} />
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
@@ -109,7 +105,8 @@ const App = () => {
             </MenuVisibilityProvider>
             </SponsorProvider>
             </RolePermissionsProvider>
-          </InterfaceProvider>
+            </InterfaceProvider>
+          </RoleProvider>
         </AuthProvider>
     </QueryClientProvider>
     </ThemeProvider>

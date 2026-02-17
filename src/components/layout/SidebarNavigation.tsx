@@ -30,22 +30,20 @@ import {
   DollarSign,
   Bell,
   HelpCircle,
-  HandCoins,
-  CheckCircle2,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
+  HandCoins,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CLIENTS } from '@/pages/Clients';
 import { useRepresentativesSearch } from '@/context/RepresentativesSearchContext';
-import { getInterfaceDisplayName } from '@/components/InterfaceSwitcher';
 import { useInterface } from '@/context/InterfaceContext';
 import { useMenuVisibility } from '@/context/MenuVisibilityContext';
 import { useRolePermissions } from '@/context/RolePermissionsContext';
 import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
 import { useAddMemberModal } from '@/context/AddMemberModalContext';
+import { RoleManagementModal } from '@/components/RoleManagementModal';
 
 // OneBoss menu items
 const oneBossMenuItems = [
@@ -58,6 +56,11 @@ const oneBossMenuItems = [
     title: 'Plan Members',
     icon: Users,
     path: '/plan-members',
+  },
+  {
+    title: 'Group Contributions',
+    icon: HandCoins,
+    path: '/group-contributions',
   },
   {
     title: 'Administrator',
@@ -124,6 +127,11 @@ const legacyMenuItems = [
     path: '/plan-members',
   },
   {
+    title: 'Group Contributions',
+    icon: HandCoins,
+    path: '/group-contributions',
+  },
+  {
     title: 'Administrator',
     icon: UserCog,
     path: '/administrator',
@@ -141,6 +149,7 @@ export function SidebarNavigation() {
   const [isClientsExpanded, setIsClientsExpanded] = useState(false);
   const [isUsersAccessExpanded, setIsUsersAccessExpanded] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [roleManagementOpen, setRoleManagementOpen] = useState(false);
   const { currentInterface, isIntermediaryInterface } = useInterface();
   const { representativesList, selectedRepresentativeId, setSelectedRepresentativeId } = useRepresentativesSearch();
   const { isMenuHidden } = useMenuVisibility();
@@ -149,18 +158,10 @@ export function SidebarNavigation() {
   const { repIdsWithPendingChanges } = usePendingMemberChanges();
   const { openAddMemberModal } = useAddMemberModal();
 
-  // Auto-expand clients dropdown when on clients page, client details page, or related pages
+  // Auto-expand clients dropdown when on plan members page, client details page, or advanced search
   useEffect(() => {
-    const relatedPaths = [
-      '/plan-members',
-      '/advanced-search',
-      '/households',
-      '/income-plans',
-      '/approvals',
-      '/reports'
-    ];
-    
-    if (location.pathname === '/plan-members' || 
+    const relatedPaths = ['/plan-members', '/advanced-search'];
+    if (location.pathname === '/plan-members' ||
         location.pathname.startsWith('/plan-members/') ||
         relatedPaths.includes(location.pathname)) {
       setIsClientsExpanded(true);
@@ -194,11 +195,12 @@ export function SidebarNavigation() {
   if (!canViewUsersAccess) menuItems = menuItems.filter((item) => item.path !== '/administrator');
   if (!canConfigure) menuItems = menuItems.filter((item) => item.path !== '/settings');
 
-  // Filter menu items when visibility is hidden - only show Dashboard, Plan Members, and Administrator
+  // Filter menu items when visibility is hidden - only show Dashboard, Plan Members, Group Contributions, and Administrator
   if (isMenuHidden) {
     menuItems = menuItems.filter(item => 
       item.path === '/' || 
       item.path === '/plan-members' || 
+      item.path === '/group-contributions' ||
       item.path === '/administrator'
     );
   }
@@ -327,44 +329,6 @@ export function SidebarNavigation() {
                               <Search className="h-3 w-3 mr-1.5" />
                               Advanced Search
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full h-7 text-xs"
-                              onClick={() => navigate('/households')}
-                            >
-                              <Building2 className="h-3 w-3 mr-1.5" />
-                              Households
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full h-7 text-xs"
-                              onClick={() => navigate('/income-plans')}
-                            >
-                              <HandCoins className="h-3 w-3 mr-1.5" />
-                              Income Plans
-                            </Button>
-                            {canApproveChanges && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="w-full h-7 text-xs"
-                                onClick={() => navigate('/approvals')}
-                              >
-                                <CheckCircle2 className="h-3 w-3 mr-1.5" />
-                                Approvals
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full h-7 text-xs"
-                              onClick={() => navigate('/reports')}
-                            >
-                              <BarChart3 className="h-3 w-3 mr-1.5" />
-                              Reports
-                            </Button>
                           </div>
                           <div className="mt-2 border border-gray-200 rounded-lg bg-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden">
                             <ScrollArea className="h-[400px]">
@@ -394,14 +358,14 @@ export function SidebarNavigation() {
                                       </div>
                                     </div>
                                   );
-                                })}
+})}
                               </div>
                             </ScrollArea>
                           </div>
                         </div>
                       )}
 
-                      {isUsersAccess && (
+                    {isUsersAccess && (
                         <div className={`mx-2 mt-1 space-y-1 group-data-[collapsible=icon]:hidden clients-dropdown-container ${
                           isUsersAccessExpanded ? 'clients-expanded' : 'clients-collapsed'
                         }`}>
@@ -427,13 +391,19 @@ export function SidebarNavigation() {
                                   Administrator Assistant
                                 </Button>
                               )}
+                              {isSuperAdmin && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => setRoleManagementOpen(true)}
+                                  className="w-full h-7 text-xs bg-white hover:bg-gray-50 text-gray-700 border border-gray-300"
+                                >
+                                  <Plus className="h-3 w-3 mr-1.5" />
+                                  Add role
+                                </Button>
+                              )}
                             </div>
                           )}
-                          <div className="mt-1.5 px-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-gray-500">
-                            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-violet-500 shrink-0" /> Super Admin</span>
-                            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" /> Admin</span>
-                            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> Admin Asst</span>
-                          </div>
+                          {representativesList.length > 0 && (
                           <div className="mt-2 border border-gray-200 rounded-lg bg-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden">
                             <ScrollArea className="h-[220px]">
                               <div className="space-y-0.5 p-2">
@@ -460,10 +430,10 @@ export function SidebarNavigation() {
                                       </div>
                                       <div className="ml-2 flex-shrink-0" title={rep.role ?? rep.status}>
                                         <div className={`h-2 w-2 rounded-full ${
-                                          rep.role === 'Super Administrator' ? 'bg-violet-500' :
-                                          rep.role === 'Administrator' ? 'bg-blue-500' :
-                                          rep.role === 'Administrator Assistant' ? 'bg-amber-500' :
-                                          rep.status === 'Active' ? 'bg-green-500' : 'bg-gray-400'
+                                          rep.role === 'super-admin' ? 'bg-violet-500' :
+                                          rep.role === 'admin' ? 'bg-blue-500' :
+                                          rep.role === 'admin-assistant' ? 'bg-amber-500' :
+                                          rep.status === 'Active' ? 'bg-amber-500' : 'bg-gray-400'
                                         }`} />
                                       </div>
                                     </div>
@@ -472,6 +442,7 @@ export function SidebarNavigation() {
                               </div>
                             </ScrollArea>
                           </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -482,6 +453,9 @@ export function SidebarNavigation() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      {isSuperAdmin && (
+        <RoleManagementModal open={roleManagementOpen} onOpenChange={setRoleManagementOpen} />
+      )}
     </Sidebar>
   );
 }

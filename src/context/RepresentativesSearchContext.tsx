@@ -28,8 +28,8 @@ export type RepresentativeItem = {
   id: string;
   name: string;
   status: string;
-  /** Optional role for Administrator page list (for dot color). */
-  role?: 'Super Administrator' | 'Administrator' | 'Administrator Assistant';
+  /** Optional role id for Administrator page list (for dot color). */
+  role?: string;
 };
 
 type ContextType = {

@@ -9,24 +9,11 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useInterface } from '@/context/InterfaceContext';
+import type { InterfaceType } from '@/context/InterfaceContext';
+import { useRoles } from '@/context/RoleContext';
 
-export type InterfaceType = 'super-admin' | 'admin' | 'admin-assistant';
-
-interface InterfaceOption {
-  id: InterfaceType;
-  label: string;
-  available: boolean;
-}
-
-const interfaceOptions: InterfaceOption[] = [
-  { id: 'super-admin', label: 'Super Administrator', available: true },
-  { id: 'admin', label: 'Administrator', available: true },
-  { id: 'admin-assistant', label: 'Administrator Assistant', available: true },
-];
-
-export const getInterfaceDisplayName = (interfaceType: InterfaceType): string => {
-  const option = interfaceOptions.find(opt => opt.id === interfaceType);
-  return option?.label || 'Administrator';
+export const getInterfaceDisplayName = (interfaceType: InterfaceType, roleName?: string): string => {
+  return roleName ?? 'Administrator';
 };
 
 const getInterfaceColor = (interfaceType: InterfaceType): string => {
@@ -44,16 +31,11 @@ const getInterfaceColor = (interfaceType: InterfaceType): string => {
 
 export function InterfaceSwitcher() {
   const { currentInterface, setCurrentInterface } = useInterface();
+  const { rolesOrdered, getRoleById } = useRoles();
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
-  const handleSelectInterface = (interfaceType: InterfaceType) => {
-    const option = interfaceOptions.find(opt => opt.id === interfaceType);
-    if (option?.available) {
-      setCurrentInterface(interfaceType);
-    }
-  };
-
-  const currentDisplayName = getInterfaceDisplayName(currentInterface);
+  const currentRole = getRoleById(currentInterface);
+  const currentDisplayName = currentRole?.name ?? 'Administrator';
 
   return (
     <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
@@ -64,7 +46,7 @@ export function InterfaceSwitcher() {
         >
           <span className="flex items-center gap-2">
             <Monitor className="h-4 w-4" />
-            <span>Current: {currentDisplayName}</span>
+            <span>Sterling Mutuals | Current: {currentDisplayName}</span>
             <Badge 
               variant="outline" 
               className={cn("font-semibold", getInterfaceColor(currentInterface))}
@@ -81,26 +63,21 @@ export function InterfaceSwitcher() {
         </div>
         <div className="p-2">
           <div className="space-y-1">
-            {interfaceOptions.map((option) => (
+            {rolesOrdered.map((role) => (
               <button
-                key={option.id}
+                key={role.id}
                 onClick={() => {
-                  handleSelectInterface(option.id);
-                  if (option.available) {
-                    setIsPopoverOpen(false);
-                  }
+                  setCurrentInterface(role.id);
+                  setIsPopoverOpen(false);
                 }}
-                disabled={!option.available}
                 className={cn(
                   "w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center justify-between",
-                  option.available
-                    ? "hover:bg-gray-100 text-gray-900 cursor-pointer"
-                    : "text-gray-400 cursor-not-allowed opacity-50",
-                  currentInterface === option.id && "bg-blue-50"
+                  "hover:bg-gray-100 text-gray-900 cursor-pointer",
+                  currentInterface === role.id && "bg-blue-50"
                 )}
               >
-                <span>{option.label}</span>
-                {currentInterface === option.id && option.available && (
+                <span>{role.name}</span>
+                {currentInterface === role.id && (
                   <Check className="h-4 w-4 text-blue-600" />
                 )}
               </button>

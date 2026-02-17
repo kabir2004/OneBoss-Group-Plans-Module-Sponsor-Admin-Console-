@@ -55,9 +55,9 @@ const oneBossMenuItems = [
     path: '/',
   },
   {
-    title: 'Clients',
+    title: 'Plan Members',
     icon: Users,
-    path: '/clients',
+    path: '/plan-members',
   },
   {
     title: 'Users & Access',
@@ -119,9 +119,9 @@ const legacyMenuItems = [
     path: '/',
   },
   {
-    title: 'Clients',
+    title: 'Plan Members',
     icon: Users,
-    path: '/clients',
+    path: '/plan-members',
   },
   {
     title: 'Users & Access',
@@ -152,7 +152,7 @@ export function SidebarNavigation() {
   // Auto-expand clients dropdown when on clients page, client details page, or related pages
   useEffect(() => {
     const relatedPaths = [
-      '/clients',
+      '/plan-members',
       '/advanced-search',
       '/households',
       '/income-plans',
@@ -160,8 +160,8 @@ export function SidebarNavigation() {
       '/reports'
     ];
     
-    if (location.pathname === '/clients' || 
-        location.pathname.startsWith('/clients/') ||
+    if (location.pathname === '/plan-members' || 
+        location.pathname.startsWith('/plan-members/') ||
         relatedPaths.includes(location.pathname)) {
       setIsClientsExpanded(true);
     }
@@ -174,12 +174,12 @@ export function SidebarNavigation() {
 
   // Set selected client ID from URL when on client details page
   useEffect(() => {
-    if (location.pathname.startsWith('/clients/')) {
-      const clientId = location.pathname.split('/clients/')[1];
+    if (location.pathname.startsWith('/plan-members/')) {
+      const clientId = location.pathname.split('/plan-members/')[1];
       if (clientId) {
         setSelectedClientId(clientId);
       }
-    } else if (location.pathname === '/clients') {
+    } else if (location.pathname === '/plan-members') {
       setSelectedClientId(null);
     }
   }, [location.pathname]);
@@ -198,7 +198,7 @@ export function SidebarNavigation() {
   if (isMenuHidden) {
     menuItems = menuItems.filter(item => 
       item.path === '/' || 
-      item.path === '/clients' || 
+      item.path === '/plan-members' || 
       item.path === '/users-access'
     );
   }
@@ -216,7 +216,7 @@ export function SidebarNavigation() {
 
   const handleClientClick = (clientId: string) => {
     setSelectedClientId(clientId);
-    navigate(`/clients/${clientId}`);
+    navigate(`/plan-members/${clientId}`);
   };
 
   return (
@@ -250,7 +250,7 @@ export function SidebarNavigation() {
               {menuItems.map((item) => {
                 const isActive = location.pathname === item.path;
                 const Icon = item.icon;
-                const isClients = item.path === '/clients';
+                const isClients = item.path === '/plan-members';
                 const isUsersAccess = item.path === '/users-access';
                 
                 return (
@@ -305,15 +305,18 @@ export function SidebarNavigation() {
                           <div className="space-y-1.5 px-1">
                             <Button
                               size="sm"
-                              onClick={() => navigate('/clients')}
+                              onClick={() => {
+                                if (location.pathname !== '/plan-members') navigate('/plan-members');
+                                openAddMemberModal();
+                              }}
                               className={`w-full h-7 text-xs ${
-                                location.pathname === '/clients'
+                                location.pathname === '/plan-members'
                                   ? 'bg-blue-600 hover:bg-blue-700 text-white'
                                   : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-300'
                               }`}
                             >
                               <Plus className="h-3 w-3 mr-1.5" />
-                              Add Clients
+                              Add Plan Members
                             </Button>
                             <Button
                               size="sm"
@@ -426,16 +429,6 @@ export function SidebarNavigation() {
                               )}
                             </div>
                           )}
-                          <div className="space-y-1.5 px-1">
-                            <Button
-                              size="sm"
-                              onClick={openAddMemberModal}
-                              className="w-full h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                            >
-                              <Plus className="h-3 w-3 mr-1.5" />
-                              Members
-                            </Button>
-                          </div>
                           <div className="mt-2 border border-gray-200 rounded-lg bg-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden">
                             <ScrollArea className="h-[400px]">
                               <div className="space-y-0.5 p-2">

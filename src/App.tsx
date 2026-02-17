@@ -85,8 +85,8 @@ const App = () => {
                   <PendingMemberChangesProvider>
                   <Routes>
                   <Route path="/" element={<Index />} />
-                  <Route path="/clients" element={<Clients />} />
-                  <Route path="/clients/:id" element={<ClientDetails />} />
+                  <Route path="/plan-members" element={<Clients />} />
+                  <Route path="/plan-members/:id" element={<ClientDetails />} />
                   <Route path="/users-access" element={<UsersAccess />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/trust-deposits" element={<TrustDeposits />} />

@@ -386,7 +386,7 @@ const Clients = () => {
         <div className="space-y-6">
         {/* Message */}
         <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">Please select a client from the clients list on the sidebar</p>
+          <p className="text-gray-500 text-lg">Please select a plan member from the plan members list on the sidebar</p>
         </div>
         </div>
     </PageLayout>

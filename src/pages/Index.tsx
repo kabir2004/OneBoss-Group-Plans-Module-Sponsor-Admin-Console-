@@ -389,7 +389,7 @@ const Index = () => {
   // Top row: 2 cards
   const intermediaryTopStatsCards = [
     { label: 'ASSETS UNDER ADMINISTRATION', value: '$1,055,611.55', icon: DollarSign, iconBg: 'bg-green-100', iconColor: 'text-green-600' },
-    { label: 'CLIENTS', value: '27', icon: Users, iconBg: 'bg-purple-100', iconColor: 'text-purple-600' },
+    { label: 'PLAN MEMBERS', value: '27', icon: Users, iconBg: 'bg-purple-100', iconColor: 'text-purple-600' },
   ];
 
   // Plans and Trades cards (second row)
@@ -882,12 +882,12 @@ const Index = () => {
           {/* Top Stats Cards - 2 cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {intermediaryTopStatsCards.map((stat, index) => {
-              const isClients = stat.label === 'CLIENTS';
+              const isClients = stat.label === 'PLAN MEMBERS';
               return (
                 <Card 
                   key={index} 
                   className={`border border-gray-200 shadow-sm bg-white ${isClients ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
-                  onClick={isClients ? () => navigate('/clients') : undefined}
+                  onClick={isClients ? () => navigate('/plan-members') : undefined}
                 >
                   <CardContent className="flex items-center justify-between py-3 h-[80px]">
                     <div className="space-y-0.5">
@@ -1191,7 +1191,7 @@ const Index = () => {
               <Card 
                 key={index} 
                 className={`border border-gray-200 shadow-sm bg-white ${stat.label === 'Members' ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
-                onClick={stat.label === 'Members' ? () => navigate('/clients') : undefined}
+                onClick={stat.label === 'Members' ? () => navigate('/plan-members') : undefined}
               >
                 <CardContent className="flex items-center justify-between py-4">
                   <div className="space-y-1">

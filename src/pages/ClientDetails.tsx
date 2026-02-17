@@ -2772,8 +2772,8 @@ const ClientDetails = () => {
       <PageLayout title="">
         <div className="text-center py-12">
           <p className="text-gray-500">Client not found</p>
-          <Button onClick={() => navigate("/clients")} className="mt-4">
-            Back to Clients
+          <Button onClick={() => navigate("/plan-members")} className="mt-4">
+            Back to Plan Members
           </Button>
         </div>
       </PageLayout>
@@ -3475,7 +3475,7 @@ const ClientDetails = () => {
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0"
-                onClick={() => navigate("/clients")}
+                onClick={() => navigate("/plan-members")}
               >
                 <X className="h-4 w-4" />
               </Button>

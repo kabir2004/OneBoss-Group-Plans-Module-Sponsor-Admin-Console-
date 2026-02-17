@@ -34,8 +34,18 @@ import { UserPlus, Pencil, UserX, Save, X, Check, XCircle } from 'lucide-react';
 import { useRepresentativesSearch } from '@/context/RepresentativesSearchContext';
 import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
 import type { ProposedMemberEdits, PendingChange, SubmitterRole, ReviewOutcome } from '@/context/PendingMemberChangesContext';
-import { CLIENTS } from '@/pages/Clients';
 import { getRepresentativeDetails } from '@/data/representativeDetails';
+
+/** List of 6 people shown under "+ Administrator" on Users & Access (sidebar). Has full fields for detail panel. */
+type UsersAccessRep = { id: string; name: string; status: string; email: string; city: string; province: string; accountNumber: string };
+const USERS_ACCESS_REPRESENTATIVES: UsersAccessRep[] = [
+  { id: 'UA1', name: 'Morgan Reeves', email: 'morgan.reeves@example.com', city: 'Calgary', province: 'AB', accountNumber: 'UA1', status: 'Active' },
+  { id: 'UA2', name: 'Jordan Blake', email: 'jordan.blake@example.com', city: 'Halifax', province: 'NS', accountNumber: 'UA2', status: 'Active' },
+  { id: 'UA3', name: 'Riley Sutton', email: 'riley.sutton@example.com', city: 'Winnipeg', province: 'MB', accountNumber: 'UA3', status: 'Active' },
+  { id: 'UA4', name: 'Casey Quinn', email: 'casey.quinn@example.com', city: 'Edmonton', province: 'AB', accountNumber: 'UA4', status: 'Active' },
+  { id: 'UA5', name: 'Skyler Hayes', email: 'skyler.hayes@example.com', city: 'Ottawa', province: 'ON', accountNumber: 'UA5', status: 'Active' },
+  { id: 'UA6', name: 'Avery Cross', email: 'avery.cross@example.com', city: 'Victoria', province: 'BC', accountNumber: 'UA6', status: 'Active' },
+];
 import type { RepDetails } from '@/data/representativeDetails';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -53,10 +63,12 @@ type User = {
 const ROLES: UserRole[] = ['Super Administrator', 'Administrator', 'Administrator Assistant'];
 
 const initialUsers: User[] = [
-  { id: '1', name: 'Antoine Marsh', email: 'antoine.marsh@example.com', role: 'Administrator', status: 'Active' },
-  { id: '2', name: 'Sarah Chen', email: 'sarah.chen@example.com', role: 'Super Administrator', status: 'Active' },
-  { id: '3', name: 'James Wilson', email: 'james.wilson@example.com', role: 'Administrator Assistant', status: 'Active' },
-  { id: '4', name: 'Maria Garcia', email: 'maria.garcia@example.com', role: 'Administrator', status: 'Disabled' },
+  { id: '1', name: 'Sarah Chen', email: 'sarah.chen@example.com', role: 'Super Administrator', status: 'Active' },
+  { id: '2', name: 'Antoine Marsh', email: 'antoine.marsh@example.com', role: 'Administrator', status: 'Active' },
+  { id: '3', name: 'Maria Garcia', email: 'maria.garcia@example.com', role: 'Administrator', status: 'Active' },
+  { id: '4', name: 'James Wilson', email: 'james.wilson@example.com', role: 'Administrator Assistant', status: 'Active' },
+  { id: '5', name: 'Emily Davis', email: 'emily.davis@example.com', role: 'Administrator Assistant', status: 'Active' },
+  { id: '6', name: 'David Brown', email: 'david.brown@example.com', role: 'Administrator Assistant', status: 'Active' },
 ];
 
 const ASSISTANT_ROLE: UserRole = 'Administrator Assistant';
@@ -139,8 +151,8 @@ const UsersAccess = () => {
   }, [canViewUsersAccess, navigate]);
 
   useEffect(() => {
-    setRepresentativesCount(CLIENTS.length);
-    setRepresentativesList(CLIENTS.map((c) => ({ id: c.id, name: c.name, status: c.status })));
+    setRepresentativesCount(USERS_ACCESS_REPRESENTATIVES.length);
+    setRepresentativesList(USERS_ACCESS_REPRESENTATIVES.map((c) => ({ id: c.id, name: c.name, status: c.status })));
   }, [setRepresentativesCount, setRepresentativesList]);
 
   // Open invite modal with role when navigating from sidebar "+ Administrator" / "+ Administrator Assistant"
@@ -222,7 +234,7 @@ const UsersAccess = () => {
     setSelectedUser(null);
   };
 
-  const selectedClient = selectedRepresentativeId ? CLIENTS.find((c) => c.id === selectedRepresentativeId) : null;
+  const selectedClient = selectedRepresentativeId ? USERS_ACCESS_REPRESENTATIVES.find((c) => c.id === selectedRepresentativeId) : null;
   const baseDetails: RepDetails | null = selectedClient ? getRepresentativeDetails(selectedClient.id, selectedClient) : null;
   const details: RepDetails | null = baseDetails ? getEffectiveDetails(baseDetails) : null;
   const pending = selectedRepresentativeId ? getPendingForRep(selectedRepresentativeId) : null;

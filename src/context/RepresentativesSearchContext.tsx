@@ -24,7 +24,13 @@ const initialSearch: RepresentativesSearchState = {
   mr72OnFile: 'all',
 };
 
-export type RepresentativeItem = { id: string; name: string; status: string };
+export type RepresentativeItem = {
+  id: string;
+  name: string;
+  status: string;
+  /** Optional role for Administrator page list (for dot color). */
+  role?: 'Super Administrator' | 'Administrator' | 'Administrator Assistant';
+};
 
 type ContextType = {
   search: RepresentativesSearchState;

@@ -429,8 +429,13 @@ export function SidebarNavigation() {
                               )}
                             </div>
                           )}
+                          <div className="mt-1.5 px-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-gray-500">
+                            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-violet-500 shrink-0" /> Super Admin</span>
+                            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" /> Admin</span>
+                            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" /> Admin Asst</span>
+                          </div>
                           <div className="mt-2 border border-gray-200 rounded-lg bg-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden">
-                            <ScrollArea className="h-[400px]">
+                            <ScrollArea className="h-[220px]">
                               <div className="space-y-0.5 p-2">
                                 {representativesList.map((rep) => {
                                   const isSelected = selectedRepresentativeId === rep.id;
@@ -453,8 +458,11 @@ export function SidebarNavigation() {
                                           </span>
                                         )}
                                       </div>
-                                      <div className="ml-2 flex-shrink-0">
+                                      <div className="ml-2 flex-shrink-0" title={rep.role ?? rep.status}>
                                         <div className={`h-2 w-2 rounded-full ${
+                                          rep.role === 'Super Administrator' ? 'bg-violet-500' :
+                                          rep.role === 'Administrator' ? 'bg-blue-500' :
+                                          rep.role === 'Administrator Assistant' ? 'bg-amber-500' :
                                           rep.status === 'Active' ? 'bg-green-500' : 'bg-gray-400'
                                         }`} />
                                       </div>

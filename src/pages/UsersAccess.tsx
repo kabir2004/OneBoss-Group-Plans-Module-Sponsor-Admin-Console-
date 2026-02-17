@@ -36,15 +36,15 @@ import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
 import type { ProposedMemberEdits, PendingChange, SubmitterRole, ReviewOutcome } from '@/context/PendingMemberChangesContext';
 import { getRepresentativeDetails } from '@/data/representativeDetails';
 
-/** List of 6 people shown under "+ Administrator" on Administrator page (sidebar). Has full fields for detail panel. */
-type UsersAccessRep = { id: string; name: string; status: string; email: string; city: string; province: string; accountNumber: string };
+/** List of 6 people shown under "+ Administrator" on Administrator page (sidebar). 1 Super Admin, 2 Admin, 3 Admin Assistant. Has full fields for detail panel. */
+type UsersAccessRep = { id: string; name: string; status: string; role: 'Super Administrator' | 'Administrator' | 'Administrator Assistant'; email: string; city: string; province: string; accountNumber: string };
 const USERS_ACCESS_REPRESENTATIVES: UsersAccessRep[] = [
-  { id: 'UA1', name: 'Morgan Reeves', email: 'morgan.reeves@example.com', city: 'Calgary', province: 'AB', accountNumber: 'UA1', status: 'Active' },
-  { id: 'UA2', name: 'Jordan Blake', email: 'jordan.blake@example.com', city: 'Halifax', province: 'NS', accountNumber: 'UA2', status: 'Active' },
-  { id: 'UA3', name: 'Riley Sutton', email: 'riley.sutton@example.com', city: 'Winnipeg', province: 'MB', accountNumber: 'UA3', status: 'Active' },
-  { id: 'UA4', name: 'Casey Quinn', email: 'casey.quinn@example.com', city: 'Edmonton', province: 'AB', accountNumber: 'UA4', status: 'Active' },
-  { id: 'UA5', name: 'Skyler Hayes', email: 'skyler.hayes@example.com', city: 'Ottawa', province: 'ON', accountNumber: 'UA5', status: 'Active' },
-  { id: 'UA6', name: 'Avery Cross', email: 'avery.cross@example.com', city: 'Victoria', province: 'BC', accountNumber: 'UA6', status: 'Active' },
+  { id: 'UA1', name: 'Morgan Reeves', role: 'Super Administrator', email: 'morgan.reeves@example.com', city: 'Calgary', province: 'AB', accountNumber: 'UA1', status: 'Active' },
+  { id: 'UA2', name: 'Jordan Blake', role: 'Administrator', email: 'jordan.blake@example.com', city: 'Halifax', province: 'NS', accountNumber: 'UA2', status: 'Active' },
+  { id: 'UA3', name: 'Riley Sutton', role: 'Administrator', email: 'riley.sutton@example.com', city: 'Winnipeg', province: 'MB', accountNumber: 'UA3', status: 'Active' },
+  { id: 'UA4', name: 'Casey Quinn', role: 'Administrator Assistant', email: 'casey.quinn@example.com', city: 'Edmonton', province: 'AB', accountNumber: 'UA4', status: 'Active' },
+  { id: 'UA5', name: 'Skyler Hayes', role: 'Administrator Assistant', email: 'skyler.hayes@example.com', city: 'Ottawa', province: 'ON', accountNumber: 'UA5', status: 'Active' },
+  { id: 'UA6', name: 'Avery Cross', role: 'Administrator Assistant', email: 'avery.cross@example.com', city: 'Victoria', province: 'BC', accountNumber: 'UA6', status: 'Active' },
 ];
 import type { RepDetails } from '@/data/representativeDetails';
 import { Textarea } from '@/components/ui/textarea';
@@ -152,7 +152,7 @@ const UsersAccess = () => {
 
   useEffect(() => {
     setRepresentativesCount(USERS_ACCESS_REPRESENTATIVES.length);
-    setRepresentativesList(USERS_ACCESS_REPRESENTATIVES.map((c) => ({ id: c.id, name: c.name, status: c.status })));
+    setRepresentativesList(USERS_ACCESS_REPRESENTATIVES.map((c) => ({ id: c.id, name: c.name, status: c.status, role: c.role })));
   }, [setRepresentativesCount, setRepresentativesList]);
 
   // Open invite modal with role when navigating from sidebar "+ Administrator" / "+ Administrator Assistant"

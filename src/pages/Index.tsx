@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { useInterface } from '@/context/InterfaceContext';
-import { useRolePermissions } from '@/context/RolePermissionsContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -78,7 +77,6 @@ const formatCurrency = (value: number) => {
 const Index = () => {
   const navigate = useNavigate();
   const { isIntermediaryInterface } = useInterface();
-  const { canConfigure } = useRolePermissions();
   const [activeTradeTab, setActiveTradeTab] = useState<'progress' | 'rejected' | 'confirmed'>('progress');
   const [isPlansExpanded, setIsPlansExpanded] = useState(false);
   const [showAddPlan, setShowAddPlan] = useState(false);
@@ -1259,17 +1257,15 @@ const Index = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-gray-900">Charts and Analytics</h2>
-            {canConfigure && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 text-xs"
-                onClick={() => setShowWidgetConfig(!showWidgetConfig)}
-              >
-                <Settings className="h-3 w-3 mr-1" />
-                {showWidgetConfig ? 'Hide Configure' : 'Configure'}
-              </Button>
-            )}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-8 text-xs shrink-0"
+              onClick={() => setShowWidgetConfig(!showWidgetConfig)}
+            >
+              <Settings className="h-3 w-3 mr-1" />
+              {showWidgetConfig ? 'Hide Configure' : 'Configure'}
+            </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {/* Assets By Plan Type */}

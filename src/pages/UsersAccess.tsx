@@ -36,7 +36,7 @@ import { usePendingMemberChanges } from '@/context/PendingMemberChangesContext';
 import type { ProposedMemberEdits, PendingChange, SubmitterRole, ReviewOutcome } from '@/context/PendingMemberChangesContext';
 import { getRepresentativeDetails } from '@/data/representativeDetails';
 
-/** List of 6 people shown under "+ Administrator" on Users & Access (sidebar). Has full fields for detail panel. */
+/** List of 6 people shown under "+ Administrator" on Administrator page (sidebar). Has full fields for detail panel. */
 type UsersAccessRep = { id: string; name: string; status: string; email: string; city: string; province: string; accountNumber: string };
 const USERS_ACCESS_REPRESENTATIVES: UsersAccessRep[] = [
   { id: 'UA1', name: 'Morgan Reeves', email: 'morgan.reeves@example.com', city: 'Calgary', province: 'AB', accountNumber: 'UA1', status: 'Active' },

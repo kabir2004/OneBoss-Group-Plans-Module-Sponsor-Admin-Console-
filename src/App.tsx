@@ -87,7 +87,7 @@ const App = () => {
                   <Route path="/" element={<Index />} />
                   <Route path="/plan-members" element={<Clients />} />
                   <Route path="/plan-members/:id" element={<ClientDetails />} />
-                  <Route path="/users-access" element={<UsersAccess />} />
+                  <Route path="/administrator" element={<UsersAccess />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/trust-deposits" element={<TrustDeposits />} />
                   <Route path="/households" element={<Households />} />

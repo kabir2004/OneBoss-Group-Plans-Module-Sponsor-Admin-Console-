@@ -252,7 +252,7 @@ const Approvals = () => {
 
   const openInUsersAccess = (repId: string) => {
     setSelectedRepresentativeId(repId);
-    navigate("/users-access");
+    navigate("/administrator");
   };
 
   const detailItem = detailRepId ? pendingList.find((p) => p.repId === detailRepId) : null;
@@ -339,9 +339,9 @@ const Approvals = () => {
                   variant="outline"
                   size="sm"
                   className="mt-3"
-                  onClick={() => navigate("/users-access")}
+                  onClick={() => navigate("/administrator")}
                 >
-                  Go to Users & Access
+                  Go to Administrator
                 </Button>
               </div>
             ) : (
@@ -397,7 +397,7 @@ const Approvals = () => {
                             className="gap-1.5 text-gray-600"
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
-                            Open in Users & Access
+                            Open in Administrator
                           </Button>
                           {!item.canApproveThis && (
                             <span className="text-xs text-gray-500 italic">Awaiting approval</span>
@@ -526,7 +526,7 @@ const Approvals = () => {
                 className="gap-1.5 text-gray-600 mr-auto"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
-                Open in Users & Access
+                Open in Administrator
               </Button>
               <Button variant="outline" onClick={() => setDetailRepId(null)}>
                 Close

@@ -60,9 +60,9 @@ const oneBossMenuItems = [
     path: '/plan-members',
   },
   {
-    title: 'Users & Access',
+    title: 'Administrator',
     icon: UserCog,
-    path: '/users-access',
+    path: '/administrator',
   },
   {
     title: 'Trades',
@@ -124,9 +124,9 @@ const legacyMenuItems = [
     path: '/plan-members',
   },
   {
-    title: 'Users & Access',
+    title: 'Administrator',
     icon: UserCog,
-    path: '/users-access',
+    path: '/administrator',
   },
   {
     title: 'Settings',
@@ -167,9 +167,9 @@ export function SidebarNavigation() {
     }
   }, [location.pathname]);
 
-  // Auto-expand Users & Access dropdown when on that page
+  // Auto-expand Administrator dropdown when on that page
   useEffect(() => {
-    if (location.pathname === '/users-access') setIsUsersAccessExpanded(true);
+    if (location.pathname === '/administrator') setIsUsersAccessExpanded(true);
   }, [location.pathname]);
 
   // Set selected client ID from URL when on client details page
@@ -190,16 +190,16 @@ export function SidebarNavigation() {
     ? oneBossMenuItems
     : legacyMenuItems;
 
-  // Role-based: hide Users & Access only if cannot view; hide Settings if no configure permission
-  if (!canViewUsersAccess) menuItems = menuItems.filter((item) => item.path !== '/users-access');
+  // Role-based: hide Administrator only if cannot view; hide Settings if no configure permission
+  if (!canViewUsersAccess) menuItems = menuItems.filter((item) => item.path !== '/administrator');
   if (!canConfigure) menuItems = menuItems.filter((item) => item.path !== '/settings');
 
-  // Filter menu items when visibility is hidden - only show Dashboard, Clients, and Users & Access
+  // Filter menu items when visibility is hidden - only show Dashboard, Plan Members, and Administrator
   if (isMenuHidden) {
     menuItems = menuItems.filter(item => 
       item.path === '/' || 
       item.path === '/plan-members' || 
-      item.path === '/users-access'
+      item.path === '/administrator'
     );
   }
 
@@ -251,7 +251,7 @@ export function SidebarNavigation() {
                 const isActive = location.pathname === item.path;
                 const Icon = item.icon;
                 const isClients = item.path === '/plan-members';
-                const isUsersAccess = item.path === '/users-access';
+                const isUsersAccess = item.path === '/administrator';
                 
                 return (
                   <SidebarMenuItem key={item.path}>
@@ -410,7 +410,7 @@ export function SidebarNavigation() {
                               {isSuperAdmin && (
                                 <Button
                                   size="sm"
-                                  onClick={() => navigate('/users-access?invite=Administrator')}
+                                  onClick={() => navigate('/administrator?invite=Administrator')}
                                   className="w-full h-7 text-xs bg-white hover:bg-gray-50 text-gray-700 border border-gray-300"
                                 >
                                   <Plus className="h-3 w-3 mr-1.5" />
@@ -420,7 +420,7 @@ export function SidebarNavigation() {
                               {isAdmin && (
                                 <Button
                                   size="sm"
-                                  onClick={() => navigate('/users-access?invite=Administrator+Assistant')}
+                                  onClick={() => navigate('/administrator?invite=Administrator+Assistant')}
                                   className="w-full h-7 text-xs bg-white hover:bg-gray-50 text-gray-700 border border-gray-300"
                                 >
                                   <Plus className="h-3 w-3 mr-1.5" />

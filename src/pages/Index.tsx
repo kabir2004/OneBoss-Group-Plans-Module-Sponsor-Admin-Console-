@@ -494,35 +494,9 @@ const Index = () => {
         { label: 'Imported from Ensemble', count: 4 },
       ],
     },
-    {
-      title: 'KYC Update',
-      icon: ShieldCheck,
-      iconBg: 'bg-purple-500',
-      items: [
-        { label: 'My Drafts', count: 12 },
-        { label: 'Submitted for Review', count: 0 },
-        { label: 'Denied Review', count: 3 },
-      ],
-    },
-    {
-      title: 'Client Approval',
-      icon: CheckCircle2,
-      iconBg: 'bg-green-600',
-      items: [
-        { label: 'My Drafts', count: 0 },
-        { label: 'Sent to Client', count: 0 },
-        { label: 'Expired', count: 13 },
-      ],
-    },
-    {
-      title: 'Faxing',
-      icon: FileText,
-      iconBg: 'bg-orange-500',
-      items: [
-        { label: 'My Drafts', count: 5 },
-        { label: 'Fax Error', count: 5 },
-      ],
-    },
+    { title: 'KYC Update', icon: ShieldCheck, iconBg: 'bg-purple-500', items: [], blank: true },
+    { title: 'Client Approval', icon: CheckCircle2, iconBg: 'bg-green-600', items: [], blank: true },
+    { title: 'Faxing', icon: FileText, iconBg: 'bg-orange-500', items: [], blank: true },
   ];
 
   // Plan types with counts, AUA, and hover colors
@@ -1637,41 +1611,9 @@ const Index = () => {
             </Card>
             )}
 
-            {/* Analyze My Book */}
+            {/* Analyze My Book - completely blank tile */}
             {activeWidgets.has('topFiveClients') && (
-            <Card className="border border-gray-200 shadow-sm bg-white">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-gray-900">Analyze My Book</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 space-y-3">
-                {/* Retention Score */}
-                <div>
-                  <div className="text-xs text-gray-600 mb-1">Retention Score</div>
-                  <div className="text-sm font-semibold text-green-600 mb-1">36.37</div>
-                  <div className="h-1 rounded-full bg-gray-100">
-                    <div className="h-full rounded-full bg-green-500" style={{ width: '86.37%' }}></div>
-                  </div>
-                  <div className="flex justify-between mt-1 text-[10px] text-gray-500">
-                    <span>High risk</span>
-                    <span>Low risk</span>
-                  </div>
-                </div>
-
-                {/* Engagement Score */}
-                <div>
-                  <div className="text-xs text-gray-600 mb-1">Engagement Score</div>
-                  <div className="text-sm font-semibold text-gray-900 mb-1">N/A</div>
-                  <div className="h-1 rounded-full bg-gray-200"></div>
-                  <div className="flex justify-between mt-1 text-[10px] text-gray-500">
-                    <span>Disengaged</span>
-                    <span>Engaged</span>
-                  </div>
-                </div>
-                <div className="text-xs text-gray-500 pt-3 border-t border-gray-100 text-right">
-                  Last update: 2025-10-06
-                </div>
-              </CardContent>
-            </Card>
+            <Card className="border border-gray-200 shadow-sm bg-white min-h-[160px]" />
             )}
                       </div>
           {showWidgetConfig && (
@@ -1721,7 +1663,10 @@ const Index = () => {
             </Button>
                 </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {workInProgress.map((category, index) => (
+            {workInProgress.map((category, index) =>
+              (category as { blank?: boolean }).blank ? (
+                <Card key={index} className="border border-gray-200 shadow-sm bg-white min-h-[160px]" />
+              ) : (
               <Card key={index} className="border border-gray-200 shadow-sm bg-white">
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-2">
@@ -1743,7 +1688,8 @@ const Index = () => {
                       ))}
               </CardContent>
             </Card>
-            ))}
+            )
+            )}
           </div>
         </div>
       </div>

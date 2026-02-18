@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { CLIENTS } from "./Clients";
 import { ArrowLeft, Phone } from "lucide-react";
+
+function PlanPill({ plan }: { plan: GroupPlanType }) {
+  const styles: Record<GroupPlanType, string> = {
+    RRSP: "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100",
+    TFSA: "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100",
+    DPSP: "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100",
+  };
+  return (
+    <Badge variant="outline" className={cn("font-semibold border", styles[plan])}>
+      {plan}
+    </Badge>
+  );
+}
 
 // Mock: extend client with DOB and salary (in a real app these would come from API)
 const getClientTombstone = (clientId: string) => {
@@ -182,7 +197,7 @@ const ClientDetails = () => {
                 <tbody>
                   {groupPlans.map((row) => (
                     <tr key={row.plan} className="border-b border-gray-100 hover:bg-gray-50/50">
-                      <td className="py-3 px-4 font-medium text-gray-900">{row.plan}</td>
+                      <td className="py-3 px-4"><PlanPill plan={row.plan} /></td>
                       <td className="py-3 px-4 text-right text-gray-700">{row.currentValue}</td>
                       <td className="py-3 px-4 text-right text-gray-700">{row.nextContributionDate}</td>
                       <td className="py-3 px-4 text-right text-gray-700">{row.employeeContribution}</td>

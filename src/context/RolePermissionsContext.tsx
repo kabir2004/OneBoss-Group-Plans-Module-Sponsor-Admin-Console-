@@ -30,7 +30,8 @@ export function RolePermissionsProvider({ children }: { children: ReactNode }) {
   const isAdminAssistant = order >= 2;
 
   const canManageUsers = isSuperAdmin || isAdminAssistant;
-  const canViewUsersAccess = isSuperAdmin || isAdmin; // Admin Assistant cannot see Administrator page
+  // Administrator page: visible to Super Admin (order 0) and Admin (order 1); hidden from Admin Assistant (order >= 2)
+  const canViewUsersAccess = order <= 1;
   const canConfigure = isSuperAdmin || isAdminAssistant;
   const canApproveChanges = isSuperAdmin || isAdminAssistant;
   const canManageAdmins = isSuperAdmin;

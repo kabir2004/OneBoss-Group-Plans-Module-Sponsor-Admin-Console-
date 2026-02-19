@@ -19,8 +19,9 @@ import {
   TableRow,
   TableFooter,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { CLIENTS } from "@/pages/Clients";
-import { Search, Landmark } from "lucide-react";
+import { Search, Landmark, Eye, EyeOff } from "lucide-react";
 
 const PLAN_TYPES = ["Group RRSP", "TFSA", "DPSP"] as const;
 type PlanType = (typeof PLAN_TYPES)[number];
@@ -61,8 +62,16 @@ const GroupContributions = () => {
   const [processingDate, setProcessingDate] = useState(() =>
     new Date().toISOString().slice(0, 10)
   );
+  const [eftDetailsVisible, setEftDetailsVisible] = useState(false);
 
   const eft = EFT_BY_PLAN[planType];
+
+  const maskAccountNumber = (s: string) => {
+    const digits = s.replace(/\D/g, "");
+    if (digits.length <= 4) return "****";
+    return "****-***-" + digits.slice(-4);
+  };
+  const maskTransitNumber = (s: string) => s.replace(/\d/g, "*");
 
   const onProcessingDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
@@ -175,15 +184,29 @@ const GroupContributions = () => {
             </CardContent>
           </Card>
           <Card className="border border-gray-200 shadow-sm min-w-0">
-            <CardHeader className="pb-2 flex flex-row items-center gap-2">
-              <Landmark className="h-4 w-4 text-gray-600" />
-              <CardTitle className="text-base">EFT details for {planType}</CardTitle>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Landmark className="h-4 w-4 text-gray-600 shrink-0" />
+                <CardTitle className="text-base">EFT details for {planType}</CardTitle>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 text-gray-600 hover:text-gray-900"
+                onClick={() => setEftDetailsVisible((v) => !v)}
+                aria-label={eftDetailsVisible ? "Hide account and transit numbers" : "Show account and transit numbers"}
+              >
+                {eftDetailsVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wide">Account number</p>
-                  <p className="font-medium text-gray-900">{eft.accountNumber}</p>
+                  <p className="font-medium text-gray-900 tabular-nums">
+                    {eftDetailsVisible ? eft.accountNumber : maskAccountNumber(eft.accountNumber)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wide">Institution</p>
@@ -191,7 +214,9 @@ const GroupContributions = () => {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wide">Transit number</p>
-                  <p className="font-medium text-gray-900">{eft.transitNumber}</p>
+                  <p className="font-medium text-gray-900 tabular-nums">
+                    {eftDetailsVisible ? eft.transitNumber : maskTransitNumber(eft.transitNumber)}
+                  </p>
                 </div>
               </div>
             </CardContent>
